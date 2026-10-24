@@ -6,7 +6,7 @@ function getSql(): NeonQueryFunction<false, false> {
   if (!_sql) {
     const url =
       process.env.DATABASE_URL ||
-      "postgresql://placeholder:placeholder@ep-placeholder.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
+      "postgresql://neondb_owner:npg_WB3X7PLCKSoh@ep-ancient-sun-a1h7inax-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require";
     _sql = neon(url);
   }
   return _sql;

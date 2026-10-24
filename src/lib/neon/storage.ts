@@ -10,9 +10,13 @@ let _s3: S3Client | null = null;
 
 function getS3Client(): S3Client {
   if (!_s3) {
-    const endpoint = process.env.AWS_ENDPOINT_URL_S3 || "https://placeholder.storage.neon.tech";
-    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || "placeholder";
-    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY || "placeholder";
+    const endpoint =
+      process.env.AWS_ENDPOINT_URL_S3 ||
+      "https://br-aged-king-a122ccgb.storage.c-1.ap-southeast-1.aws.neon.tech";
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID || "nak_live_eb77b1ccf1d0420f9651c755d6526d44";
+    const secretAccessKey =
+      process.env.AWS_SECRET_ACCESS_KEY ||
+      "nsk_live_ca98f453d296fbfdc19c2cb4ff36665c46a37283df10522dfb0aa2caea3650b0";
     const region = process.env.AWS_REGION || "ap-southeast-1";
 
     _s3 = new S3Client({

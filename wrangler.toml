@@ -2,3 +2,17 @@ name = "app-planner-generator"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 pages_build_output_dir = ".vercel/output/static"
+
+[vars]
+DATABASE_URL = "postgresql://neondb_owner:npg_WB3X7PLCKSoh@ep-ancient-sun-a1h7inax-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL_UNPOOLED = "postgresql://neondb_owner:npg_WB3X7PLCKSoh@ep-ancient-sun-a1h7inax.ap-southeast-1.aws.neon.tech/neondb?sslmode=require"
+NEON_BRANCH = "production"
+NEON_FUNCTION_HELLO_BASE_URL = "https://br-aged-king-a122ccgb-hello.compute.ap-southeast-1.aws.neon.tech"
+NEON_AUTH_BASE_URL = "https://ep-ancient-sun-a1h7inax.neonauth.ap-southeast-1.aws.neon.tech/neondb/auth"
+NEON_AUTH_JWKS_URL = "https://ep-ancient-sun-a1h7inax.neonauth.ap-southeast-1.aws.neon.tech/neondb/auth/.well-known/jwks.json"
+NEON_REALTIME_URL = "wss://ep-ancient-sun-a1h7inax.rt.c-1.ap-southeast-1.aws.neon.tech/"
+NEON_REALTIME_SECRET = "nrt_live_1TiBQRPhGQsTXpkAYTYV_dD5R6GFMimc3zWfolnuI3Uc"
+AWS_ACCESS_KEY_ID = "nak_live_eb77b1ccf1d0420f9651c755d6526d44"
+AWS_SECRET_ACCESS_KEY = "nsk_live_ca98f453d296fbfdc19c2cb4ff36665c46a37283df10522dfb0aa2caea3650b0"
+AWS_ENDPOINT_URL_S3 = "https://br-aged-king-a122ccgb.storage.c-1.ap-southeast-1.aws.neon.tech"
+AWS_REGION = "ap-southeast-1"
