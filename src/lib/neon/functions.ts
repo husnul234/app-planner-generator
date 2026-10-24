@@ -24,7 +24,6 @@ export async function invokeHelloFunction(): Promise<{
 
   const response = await fetch(url, {
     method: "GET",
-    cache: "no-store",
     headers: {
       "User-Agent": "AppPlanner/1.0",
     },

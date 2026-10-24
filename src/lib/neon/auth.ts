@@ -20,7 +20,6 @@ export async function getAuthJwks(): Promise<{ keys: unknown[] }> {
   }
 
   const res = await fetch(jwksUrl, {
-    cache: "no-store",
     headers: {
       Accept: "application/json",
     },
