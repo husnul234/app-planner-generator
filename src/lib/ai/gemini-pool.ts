@@ -10,8 +10,13 @@
  */
 
 export const GEMINI_MODEL_CHAIN = [
+  "gemini-3.8-flash",
+  "gemini-3.5-flash-lite",
+  "gemini-3-flash",
+  "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
   "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
   "gemini-1.5-flash",
   "gemini-1.5-pro",
 ];
@@ -41,6 +46,7 @@ export async function validateGeminiApiKey(apiKey: string): Promise<{
   valid: boolean;
   error?: string;
   modelCount?: number;
+  availableModels?: string[];
 }> {
   if (!apiKey || apiKey.trim().length < 20) {
     return { valid: false, error: "Format API Key tidak valid (terlalu pendek)" };
@@ -69,8 +75,15 @@ export async function validateGeminiApiKey(apiKey: string): Promise<{
     }
 
     const data = await res.json();
-    const count = Array.isArray(data.models) ? data.models.length : 0;
-    return { valid: true, modelCount: count };
+    const rawModels: Array<{ name: string; supportedGenerationMethods?: string[] }> = Array.isArray(data.models) ? data.models : [];
+    const count = rawModels.length;
+
+    // Filter models supporting generateContent
+    const contentModels = rawModels
+      .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+      .map((m) => m.name.replace("models/", ""));
+
+    return { valid: true, modelCount: count, availableModels: contentModels };
   } catch (err: unknown) {
     return { valid: false, error: (err as Error).message };
   }

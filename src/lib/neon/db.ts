@@ -222,6 +222,26 @@ export async function listProfiles(): Promise<ProfileRecord[]> {
   return rows as unknown as ProfileRecord[];
 }
 
+export async function getProfileByEmail(email: string): Promise<ProfileRecord | null> {
+  const rows = await sql`
+    SELECT id, email, full_name, avatar_url, role, credits_remaining, created_at
+    FROM public.profiles
+    WHERE LOWER(email) = LOWER(${email.trim()})
+    LIMIT 1;
+  `;
+  return (rows[0] as unknown as ProfileRecord) || null;
+}
+
+export async function getProfileById(id: string): Promise<ProfileRecord | null> {
+  const rows = await sql`
+    SELECT id, email, full_name, avatar_url, role, credits_remaining, created_at
+    FROM public.profiles
+    WHERE id = ${id}
+    LIMIT 1;
+  `;
+  return (rows[0] as unknown as ProfileRecord) || null;
+}
+
 export async function createOrUpdateProfile(data: {
   id?: string;
   email: string;

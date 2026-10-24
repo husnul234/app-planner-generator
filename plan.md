@@ -82,3 +82,41 @@ Berikut adalah status operasional 6 menu utama di antarmuka web desktop:
 | **4. BYOK Keys** | Manajemen kolam multi-key Google Gemini, validasi ke Google Generative Language API, rantai model fallback (`gemini-2.5-flash` s/d `gemini-1.5-pro`), rotasi HTTP 429/503, toggle aktif, dan tester inferensi prompt langsung di UI. | `GET /api/keys`, `POST /api/keys`, `PUT /api/keys`, `DELETE /api/keys` | **TERUJI (200 OK)** |
 | **5. Team & Roles** | Role-Based Access Control (`admin` & `user`), tabel pengguna, form undang anggota via email, ubah role, batalkan undangan, dan switcher persona di navbar header. | `GET /api/team`, `POST /api/team`, `PUT /api/team`, `DELETE /api/team` | **TERUJI (200 OK)** |
 | **6. Neon Infra** | Dashboard telemetri live latensi 5 layanan Neon: Serverless PostgreSQL (driver `@neondatabase/serverless`), Object Storage (S3 bucket `assets`), Auth JWKS, Functions, dan Realtime WebSocket Gateway. | `GET /api/neon/health` | **TERUJI (200 OK)** |
+
+---
+
+## 4. Pembaruan Lanjutan: Auth Page, Dashboard Separasi & Model Gemini 2026
+
+Berdasarkan permintaan pengguna dan pembaruan kuota Google AI Studio terbaru:
+1. **Model AI Gemini yang Didukung Saat Ini (Sesuai Dashboard Quota):**
+   - `gemini-3.8-flash` (Prioritas Utama - Kapasitas RPM/TPM tertinggi)
+   - `gemini-3.5-flash-lite` (Model Ringan Cepat)
+   - `gemini-3-flash` (Text-out model)
+   - `gemini-2.5-flash-lite` (Fast low-latency)
+   - `gemini-2.5-flash` (Generasi stabil)
+   - `gemini-2.0-flash` & `gemini-2.0-flash-lite`
+   - `gemini-1.5-flash` & `gemini-1.5-pro` (Fallback legacy)
+2. **Pembersihan Data Dummy:**
+   - Seluruh data dummy di PostgreSQL (`projects`, `project_documents`, `invitations`, `user_api_keys`) dan bucket S3 telah dihapus bersih.
+   - Initial state Workspace kini menampilkan **Empty State** bersih ("Belum Ada Proyek Blueprint") tanpa data hardcoded.
+3. **Aktivasi AuthPage:**
+   - Antarmuka autentikasi interaktif di `/` saat belum login, mendukung:
+     - Form Masuk (Email & Password).
+     - Form Daftar Akun Baru (Nama, Email, Password, Pilihan Peran: User atau Admin).
+     - Tombol 1-Click Akses Cepat Simulasi: `Super Admin` (`admin@appplanner.ai`) dan `Indie Developer` (`user@appplanner.ai`).
+     - Session persistence di `localStorage` dengan tombol Logout.
+4. **Separasi Penuh Dashboard Admin & User:**
+   - **Admin Dashboard:**
+     - Pusat Kendali Ringkasan Sistem (Total Pengguna, Total Proyek, Total Kunci, Latensi).
+     - Manajemen Anggota Tim & Role RBAC (Ubah role, hapus user, kirim undangan).
+     - Audit & Tata Kelola Seluruh Proyek di platform.
+     - Monitoring Kolam Kunci BYOK Global & Tester Inferensi.
+     - Telemetri 5 Layanan Neon Serverless (Postgres, Storage, Auth, Functions, Realtime).
+     - Fitur Simulasi Tampilan User (Preview as User).
+   - **User Dashboard:**
+     - Workspace Blueprint Dokumen Terpadu (Viewer, Inline Editor, Add Custom Doc, Bundle Prompt AI, Unduh .md & ZIP).
+     - Proyek Saya (CRUD, Filter Status, Pencarian).
+     - Wizard 7-Tahap Perencanaan Arsitektur.
+     - Kunci BYOK Saya (Manajemen kunci pribadi, validasi live ke Google API, tester inferensi).
+     - *User terisolasi dari akses telemetri infrastruktur dan pengelolaan role tim.*
+
