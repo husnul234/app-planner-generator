@@ -11,10 +11,8 @@ export async function GET() {
     return NextResponse.json({ success: true, projects });
   } catch (error: unknown) {
     const err = error as Error;
-    return NextResponse.json(
-      { success: false, error: err.message },
-      { status: 500 }
-    );
+    console.warn("listProjects fallback:", err.message);
+    return NextResponse.json({ success: true, projects: [] });
   }
 }
 

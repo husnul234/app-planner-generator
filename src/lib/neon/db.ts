@@ -12,13 +12,20 @@ function getSql(): NeonQueryFunction<false, false> {
   return _sql;
 }
 
-// Lazy proxy — call getSql() only when actually querying
-const sql = new Proxy({} as NeonQueryFunction<false, false>, {
+// Lazy callable proxy — must have a function target so typeof sql === "function"
+const dummyCallable = function () {} as unknown as NeonQueryFunction<false, false>;
+
+const sql = new Proxy(dummyCallable, {
   get(_target, prop) {
-    return (getSql() as unknown as Record<string | symbol, unknown>)[prop];
+    const realSql = getSql() as unknown as Record<string | symbol, unknown>;
+    const val = realSql[prop];
+    if (typeof val === "function") {
+      return (val as (...a: unknown[]) => unknown).bind(realSql);
+    }
+    return val;
   },
-  apply(_target, _thisArg, args) {
-    return (getSql() as unknown as (...a: unknown[]) => unknown)(...args);
+  apply(_target, thisArg, args) {
+    return Reflect.apply(getSql() as unknown as (...a: unknown[]) => unknown, thisArg, args);
   },
 });
 

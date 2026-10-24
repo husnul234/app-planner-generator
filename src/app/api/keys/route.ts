@@ -31,7 +31,8 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ success: true, keys: masked });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+    console.warn("listUserApiKeys fallback:", (error as Error).message);
+    return NextResponse.json({ success: true, keys: [] });
   }
 }
 

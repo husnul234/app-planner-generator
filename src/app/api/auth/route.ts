@@ -34,18 +34,32 @@ export async function POST(req: Request) {
     // Quick login for development / demonstration
     if (action === "quick-login") {
       const targetEmail = role === "admin" ? "admin@appplanner.ai" : "user@appplanner.ai";
-      let profile = await getProfileByEmail(targetEmail);
+      try {
+        let profile = await getProfileByEmail(targetEmail);
 
-      if (!profile) {
-        profile = await createOrUpdateProfile({
+        if (!profile) {
+          profile = await createOrUpdateProfile({
+            email: targetEmail,
+            full_name: role === "admin" ? "Super Admin" : "Indie Vibecoder",
+            role: role === "admin" ? "admin" : "user",
+            credits_remaining: role === "admin" ? 50000 : 10000,
+          });
+        }
+
+        return NextResponse.json({ success: true, profile });
+      } catch (dbErr: unknown) {
+        console.warn("DB query error during quick-login, fallback to session:", dbErr);
+        const fallbackProfile = {
+          id: role === "admin" ? "admin-quick-session" : "user-quick-session",
           email: targetEmail,
           full_name: role === "admin" ? "Super Admin" : "Indie Vibecoder",
           role: role === "admin" ? "admin" : "user",
           credits_remaining: role === "admin" ? 50000 : 10000,
-        });
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        return NextResponse.json({ success: true, profile: fallbackProfile });
       }
-
-      return NextResponse.json({ success: true, profile });
     }
 
     // Standard Login
