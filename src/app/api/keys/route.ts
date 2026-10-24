@@ -9,6 +9,7 @@ import {
 import { validateGeminiApiKey, maskApiKey, executeGeminiWithKeyPool } from "../../../lib/ai/gemini-pool";
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 export async function GET(req: Request) {
   try {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getProfileByEmail, getProfileById, createOrUpdateProfile } from "../../../lib/neon/db";
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 export async function GET(req: Request) {
   try {

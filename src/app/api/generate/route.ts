@@ -5,6 +5,7 @@ import { uploadObject } from "../../../lib/neon/storage";
 import { executeGeminiWithKeyPool } from "../../../lib/ai/gemini-pool";
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 export async function POST(req: Request) {
   try {

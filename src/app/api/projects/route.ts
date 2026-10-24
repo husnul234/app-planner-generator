@@ -3,6 +3,7 @@ import { listProjects, saveProject, saveProjectDocument } from "../../../lib/neo
 import { uploadObject } from "../../../lib/neon/storage";
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 export async function GET() {
   try {

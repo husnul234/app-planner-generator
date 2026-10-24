@@ -6,6 +6,7 @@ import { checkFunctionHealth } from "../../../../lib/neon/functions";
 import { checkRealtimeHealth } from "../../../../lib/neon/realtime";
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 export async function GET() {
   const timestamp = new Date().toISOString();
