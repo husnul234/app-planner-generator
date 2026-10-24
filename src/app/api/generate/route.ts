@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { BLUEPRINT_DOCUMENTS, ProjectMeta } from "../../../lib/generator/templates";
-import { saveProject, saveProjectDocument } from "../../../lib/neon/db";
+import { saveProject, saveProjectDocument, getActiveGeminiKeys } from "../../../lib/neon/db";
 import { uploadObject } from "../../../lib/neon/storage";
+import { executeGeminiWithKeyPool } from "../../../lib/ai/gemini-pool";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +30,60 @@ export async function POST(req: Request) {
       selectedModel: body.selectedModel || "Google Gemini 2.0 Flash",
     };
 
-    // Generate 11 documents
+    // 1. Gather available Gemini keys for BYOK pool
+    let geminiKeys: string[] = [];
+    if (Array.isArray(body.geminiKeys) && body.geminiKeys.length > 0) {
+      geminiKeys = body.geminiKeys;
+    } else {
+      try {
+        geminiKeys = await getActiveGeminiKeys(body.userId);
+      } catch (keyErr) {
+        console.warn("Could not fetch user keys from database:", keyErr);
+      }
+    }
+
+    // Optional environment fallback if configured
+    if (geminiKeys.length === 0 && process.env.GEMINI_API_KEY) {
+      geminiKeys.push(process.env.GEMINI_API_KEY);
+    }
+
+    let aiResultMetrics = null;
+
+    // 2. If Gemini keys exist in pool, perform AI synthesis for PRD executive summary
+    let customAiSummary = "";
+    if (geminiKeys.length > 0) {
+      const prompt = `Bertindaklah sebagai Senior Software Architect. Berikan ringkasan arsitektur teknis dan analisis scope mendalam dalam format Markdown untuk aplikasi berikut:
+Nama Aplikasi: ${meta.appName}
+Kategori: ${meta.category}
+Masalah: ${meta.problem}
+Fitur Inti: ${meta.coreFeatures.join(", ")}
+Tech Stack: ${meta.techStack.join(", ")}
+
+Berikan output langsung dalam format Markdown dengan judul '## Analisis Arsitektur & Rekomendasi Solusi'.`;
+
+      const aiGen = await executeGeminiWithKeyPool({
+        prompt,
+        systemPrompt: "Anda adalah Lead Technical Architect AI untuk AppPlanner.",
+        keys: geminiKeys,
+      });
+
+      if (aiGen.success) {
+        customAiSummary = `\n\n${aiGen.text}\n`;
+        aiResultMetrics = {
+          usedModel: aiGen.usedModel,
+          usedKey: aiGen.usedKeyMasked,
+          tokensEstimate: aiGen.tokensUsedEstimate,
+          attempts: aiGen.triedAttempts,
+        };
+      }
+    }
+
+    // 3. Generate 11 documents
     const documents = BLUEPRINT_DOCUMENTS.map((doc) => {
-      const content = doc.defaultContent(meta);
+      let content = doc.defaultContent(meta);
+      if (doc.filename === "PRD.md" && customAiSummary) {
+        content += customAiSummary;
+      }
       return {
         filename: doc.filename,
         file_slug: doc.file_slug,
@@ -90,6 +142,7 @@ export async function POST(req: Request) {
       meta,
       documentsCount: documents.length,
       documents,
+      aiMetrics: aiResultMetrics,
     });
   } catch (error: unknown) {
     const err = error as Error;

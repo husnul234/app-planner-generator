@@ -138,11 +138,28 @@ async function migrate() {
     );
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS public.user_api_keys (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id UUID REFERENCES neon_auth.user(id) ON DELETE CASCADE,
+      provider TEXT NOT NULL DEFAULT 'gemini',
+      api_key TEXT NOT NULL,
+      key_nickname TEXT,
+      is_active BOOLEAN NOT NULL DEFAULT true,
+      status TEXT NOT NULL DEFAULT 'untested',
+      last_used_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    );
+  `;
+
   // Indexes
   await sql`CREATE INDEX IF NOT EXISTS idx_projects_user_id ON public.projects(user_id);`;
   await sql`CREATE INDEX IF NOT EXISTS idx_projects_status ON public.projects(status);`;
   await sql`CREATE INDEX IF NOT EXISTS idx_project_docs_project_id ON public.project_documents(project_id);`;
   await sql`CREATE INDEX IF NOT EXISTS idx_project_docs_status ON public.project_documents(status);`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_api_keys_user_id ON public.user_api_keys(user_id);`;
+  await sql`CREATE INDEX IF NOT EXISTS idx_user_api_keys_provider ON public.user_api_keys(provider);`;
 
   console.log('Migration completed successfully.');
 }

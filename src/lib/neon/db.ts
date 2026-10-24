@@ -300,3 +300,88 @@ export async function deleteInvitation(id: string): Promise<boolean> {
   await sql`DELETE FROM public.invitations WHERE id = ${id};`;
   return true;
 }
+
+// ----------------------------------------------------------------------------
+// BYOK (USER API KEYS POOL - GEMINI, ETC)
+// ----------------------------------------------------------------------------
+
+export interface UserApiKeyRecord {
+  id: string;
+  user_id: string | null;
+  provider: string;
+  api_key: string;
+  key_nickname: string | null;
+  is_active: boolean;
+  status: string;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export async function listUserApiKeys(userId?: string): Promise<UserApiKeyRecord[]> {
+  const rows = userId
+    ? await sql`
+        SELECT id, user_id, provider, api_key, key_nickname, is_active, status, last_used_at, created_at
+        FROM public.user_api_keys
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC;
+      `
+    : await sql`
+        SELECT id, user_id, provider, api_key, key_nickname, is_active, status, last_used_at, created_at
+        FROM public.user_api_keys
+        ORDER BY created_at DESC;
+      `;
+  return rows as unknown as UserApiKeyRecord[];
+}
+
+export async function addUserApiKey(data: {
+  user_id?: string;
+  provider?: string;
+  api_key: string;
+  key_nickname?: string;
+}): Promise<UserApiKeyRecord> {
+  const provider = data.provider || "gemini";
+  const nickname = data.key_nickname || `${provider.toUpperCase()} Key (${data.api_key.slice(-4)})`;
+  const rows = await sql`
+    INSERT INTO public.user_api_keys (user_id, provider, api_key, key_nickname, is_active, status)
+    VALUES (${data.user_id || null}, ${provider}, ${data.api_key.trim()}, ${nickname}, true, 'valid')
+    RETURNING id, user_id, provider, api_key, key_nickname, is_active, status, last_used_at, created_at;
+  `;
+  return rows[0] as unknown as UserApiKeyRecord;
+}
+
+export async function updateUserApiKeyStatus(
+  id: string,
+  status: string,
+  isActive?: boolean
+): Promise<UserApiKeyRecord> {
+  const activeClause = isActive !== undefined ? isActive : true;
+  const rows = await sql`
+    UPDATE public.user_api_keys
+    SET status = ${status}, is_active = ${activeClause}, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id, user_id, provider, api_key, key_nickname, is_active, status, last_used_at, created_at;
+  `;
+  return rows[0] as unknown as UserApiKeyRecord;
+}
+
+export async function deleteUserApiKey(id: string): Promise<boolean> {
+  await sql`DELETE FROM public.user_api_keys WHERE id = ${id};`;
+  return true;
+}
+
+export async function getActiveGeminiKeys(userId?: string): Promise<string[]> {
+  const rows = userId
+    ? await sql`
+        SELECT api_key
+        FROM public.user_api_keys
+        WHERE provider = 'gemini' AND is_active = true AND (user_id = ${userId} OR user_id IS NULL)
+        ORDER BY created_at ASC;
+      `
+    : await sql`
+        SELECT api_key
+        FROM public.user_api_keys
+        WHERE provider = 'gemini' AND is_active = true
+        ORDER BY created_at ASC;
+      `;
+  return rows.map((r: any) => r.api_key);
+}
