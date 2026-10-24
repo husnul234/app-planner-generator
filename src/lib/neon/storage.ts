@@ -6,37 +6,38 @@ import {
   HeadBucketCommand,
 } from "@aws-sdk/client-s3";
 
-function getStorageClient(): S3Client {
-  const endpoint = process.env.AWS_ENDPOINT_URL_S3;
-  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-  const region = process.env.AWS_REGION || "ap-southeast-1";
+let _s3: S3Client | null = null;
 
-  if (!endpoint || !accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "Missing Neon Object Storage credentials in environment (AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)"
-    );
+function getS3Client(): S3Client {
+  if (!_s3) {
+    const endpoint = process.env.AWS_ENDPOINT_URL_S3;
+    const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+    const region = process.env.AWS_REGION || "ap-southeast-1";
+
+    if (!endpoint || !accessKeyId || !secretAccessKey) {
+      throw new Error(
+        "Missing Neon Object Storage credentials in environment (AWS_ENDPOINT_URL_S3, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY)"
+      );
+    }
+
+    _s3 = new S3Client({
+      endpoint,
+      region,
+      credentials: { accessKeyId, secretAccessKey },
+      forcePathStyle: true,
+    });
   }
-
-  return new S3Client({
-    endpoint,
-    region,
-    credentials: {
-      accessKeyId,
-      secretAccessKey,
-    },
-    forcePathStyle: true,
-  });
+  return _s3;
 }
 
-export const s3 = getStorageClient();
 export const DEFAULT_BUCKET = "assets";
 
 export async function checkStorageHealth(bucketName = DEFAULT_BUCKET) {
   const start = Date.now();
   try {
-    await s3.send(new HeadBucketCommand({ Bucket: bucketName }));
-    const list = await s3.send(
+    await getS3Client().send(new HeadBucketCommand({ Bucket: bucketName }));
+    const list = await getS3Client().send(
       new ListObjectsV2Command({ Bucket: bucketName, MaxKeys: 5 })
     );
     const duration = Date.now() - start;
@@ -72,7 +73,7 @@ export async function uploadObject(
     Body: body,
     ContentType: contentType,
   });
-  return await s3.send(command);
+  return await getS3Client().send(command);
 }
 
 export async function getObject(
@@ -83,7 +84,7 @@ export async function getObject(
     Bucket: bucketName,
     Key: key,
   });
-  const response = await s3.send(command);
+  const response = await getS3Client().send(command);
   if (!response.Body) {
     throw new Error(`Empty body returned for key: ${key}`);
   }
@@ -95,7 +96,7 @@ export async function listObjects(prefix = "", bucketName = DEFAULT_BUCKET) {
     Bucket: bucketName,
     Prefix: prefix,
   });
-  const response = await s3.send(command);
+  const response = await getS3Client().send(command);
   return (
     response.Contents?.map((item) => ({
       key: item.Key || "",
@@ -111,7 +112,7 @@ export async function deleteObject(key: string, bucketName = DEFAULT_BUCKET) {
     Bucket: bucketName,
     Key: key,
   });
-  return await s3.send(command);
+  return await getS3Client().send(command);
 }
 
 export async function deleteFolder(prefix: string, bucketName = DEFAULT_BUCKET) {

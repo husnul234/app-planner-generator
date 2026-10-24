@@ -1,14 +1,29 @@
-import { neon } from "@neondatabase/serverless";
+import { neon, NeonQueryFunction } from "@neondatabase/serverless";
 
-function getDatabaseUrl(): string {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is not defined in environment variables");
+let _sql: NeonQueryFunction<false, false> | null = null;
+
+function getSql(): NeonQueryFunction<false, false> {
+  if (!_sql) {
+    const url = process.env.DATABASE_URL;
+    if (!url) {
+      throw new Error("DATABASE_URL is not defined in environment variables");
+    }
+    _sql = neon(url);
   }
-  return url;
+  return _sql;
 }
 
-export const sql = neon(getDatabaseUrl());
+// Lazy proxy — call getSql() only when actually querying
+const sql = new Proxy({} as NeonQueryFunction<false, false>, {
+  get(_target, prop) {
+    return (getSql() as unknown as Record<string | symbol, unknown>)[prop];
+  },
+  apply(_target, _thisArg, args) {
+    return (getSql() as unknown as (...a: unknown[]) => unknown)(...args);
+  },
+});
+
+export { sql };
 
 export interface ProjectRecord {
   id: string;
