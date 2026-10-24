@@ -104,3 +104,21 @@ export async function listObjects(prefix = "", bucketName = DEFAULT_BUCKET) {
     })) || []
   );
 }
+
+export async function deleteObject(key: string, bucketName = DEFAULT_BUCKET) {
+  const { DeleteObjectCommand } = await import("@aws-sdk/client-s3");
+  const command = new DeleteObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  });
+  return await s3.send(command);
+}
+
+export async function deleteFolder(prefix: string, bucketName = DEFAULT_BUCKET) {
+  const objects = await listObjects(prefix, bucketName);
+  for (const obj of objects) {
+    if (obj.key) {
+      await deleteObject(obj.key, bucketName);
+    }
+  }
+}

@@ -127,6 +127,17 @@ async function migrate() {
     );
   `;
 
+  await sql`
+    CREATE TABLE IF NOT EXISTS public.invitations (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      email TEXT NOT NULL,
+      role public.user_role NOT NULL DEFAULT 'user',
+      status TEXT NOT NULL DEFAULT 'pending',
+      invited_by UUID REFERENCES neon_auth.user(id),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+    );
+  `;
+
   // Indexes
   await sql`CREATE INDEX IF NOT EXISTS idx_projects_user_id ON public.projects(user_id);`;
   await sql`CREATE INDEX IF NOT EXISTS idx_projects_status ON public.projects(status);`;
