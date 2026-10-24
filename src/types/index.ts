@@ -38,6 +38,7 @@ export interface ProfileItem {
   full_name: string | null;
   role: "admin" | "user";
   credits_remaining: number;
+  custom_settings?: Record<string, any>;
   created_at: string;
 }
 
@@ -70,4 +71,24 @@ export interface ProjectMeta {
   techStack: string[];
   dbType: string;
   selectedModel: string;
+}
+
+export interface TaskExecutionItem {
+  id: string; // e.g. "TASK-01"
+  phase: string; // e.g. "Fase 1: Fondasi Skema Database"
+  title: string;
+  category: string;
+  targetFiles: string[];
+  description: string;
+  aiPrompt: string;
+  acceptanceCriteria: string;
+  completed: boolean;
+}
+
+export interface ArchitecturePreset {
+  id: string;
+  name: string;
+  badge: string;
+  description: string;
+  meta: ProjectMeta;
 }

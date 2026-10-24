@@ -23,8 +23,19 @@ import {
   Trash2,
   LogOut,
   ExternalLink,
+  Mic,
+  MicOff,
+  ListTodo,
+  CheckSquare,
+  Terminal,
+  ArrowRight,
+  Code2,
+  Calculator,
+  Sliders,
 } from "lucide-react";
-import { ProfileItem, ProjectItem, DocItem, ApiKeyItem, ProjectMeta } from "../../types";
+import { ProfileItem, ProjectItem, DocItem, ApiKeyItem, ProjectMeta, TaskExecutionItem } from "../../types";
+import { ARCHITECTURE_PRESETS, ArchitecturePreset } from "../../lib/generator/templates";
+import ProjectCostEstimator from "./ProjectCostEstimator";
 
 interface UserDashboardProps {
   currentUser: ProfileItem;
@@ -32,7 +43,17 @@ interface UserDashboardProps {
 }
 
 export default function UserDashboard({ currentUser, onLogout }: UserDashboardProps) {
-  const [activeTab, setActiveTab] = useState<"workspace" | "projects" | "wizard" | "keys">("workspace");
+  const [activeTab, setActiveTab] = useState<"workspace" | "projects" | "wizard" | "keys" | "cost">("workspace");
+  const [workspaceView, setWorkspaceView] = useState<"docs" | "tasks" | "cost">("docs");
+
+  // Speech-to-Text State (NgodingPakeAI Voice Input)
+  const [isListening, setIsListening] = useState(false);
+  const [speechTarget, setSpeechTarget] = useState<"problem" | "tagline" | null>(null);
+
+  // Task Runner State
+  const [taskFilterPhase, setTaskFilterPhase] = useState("all");
+  const [copiedTaskId, setCopiedTaskId] = useState<string | null>(null);
+  const [expandedTaskPrompts, setExpandedTaskPrompts] = useState<Record<string, boolean>>({});
 
   // Projects & Documents State (NO DUMMY DATA)
   const [projects, setProjects] = useState<ProjectItem[]>([]);
@@ -212,6 +233,26 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
     }
   };
 
+  const handleRABDocumentSaved = (doc: DocItem) => {
+    const existingIdx = documents.findIndex((d) => d.filename.toLowerCase() === doc.filename.toLowerCase());
+    if (existingIdx >= 0) {
+      const updated = [...documents];
+      updated[existingIdx] = doc;
+      setDocuments(updated);
+    } else {
+      setDocuments([...documents, doc]);
+    }
+  };
+
+  const handleOpenWorkspaceDoc = (filename: string) => {
+    const idx = documents.findIndex((d) => d.filename.toLowerCase() === filename.toLowerCase());
+    if (idx >= 0) {
+      setSelectedDocIndex(idx);
+      setWorkspaceView("docs");
+      setActiveTab("workspace");
+    }
+  };
+
   const handleCopySingle = () => {
     const activeDoc = documents[selectedDocIndex];
     if (!activeDoc) return;
@@ -271,7 +312,219 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
       .join("\n");
 
     navigator.clipboard.writeText(bundleHeader + bundleBody);
-    showNotice("AI Context Master Bundle (11 Berkas) tersalin ke clipboard!");
+    showNotice(`AI Context Master Bundle (${documents.length} Berkas) tersalin ke clipboard!`);
+  };
+
+  // Speech-to-Text Voice Input Handler (NgodingPakeAI Voice Input)
+  const handleStartSpeech = (targetField: "problem" | "tagline") => {
+    if (typeof window === "undefined") return;
+    // @ts-ignore
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      showNotice("Browser Anda belum mendukung Web Speech API. Silakan input teks secara langsung.");
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = "id-ID";
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setSpeechTarget(targetField);
+        showNotice("🎤 Mendengarkan suara Anda... Silakan berbicara.");
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        if (targetField === "problem") {
+          setMeta((prev) => ({
+            ...prev,
+            problem: prev.problem ? `${prev.problem} ${transcript}` : transcript,
+          }));
+        } else if (targetField === "tagline") {
+          setMeta((prev) => ({
+            ...prev,
+            tagline: prev.tagline ? `${prev.tagline} ${transcript}` : transcript,
+          }));
+        }
+        showNotice(`✓ Teks berhasil didengar: "${transcript}"`);
+      };
+
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        setSpeechTarget(null);
+        if (event.error === "not-allowed") {
+          showNotice("Akses mikrofon ditolak oleh browser.");
+        } else {
+          showNotice(`Perekaman suara selesai (${event.error})`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+        setSpeechTarget(null);
+      };
+
+      recognition.start();
+    } catch (err) {
+      setIsListening(false);
+      setSpeechTarget(null);
+    }
+  };
+
+  // Preset Selection Handler
+  const handleSelectPreset = (preset: ArchitecturePreset) => {
+    setMeta({ ...preset.meta });
+    showNotice(`✓ Template codebase "${preset.name}" berhasil dimuat!`);
+  };
+
+  // Parse tasks.md into TaskExecutionItem[]
+  const parseTasksFromMarkdown = (content: string): TaskExecutionItem[] => {
+    if (!content) return [];
+    const lines = content.split("\n");
+    const tasks: TaskExecutionItem[] = [];
+    let currentTask: TaskExecutionItem | null = null;
+    let currentPhase = "Umum";
+    let inPromptBlock = false;
+    let promptLines: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      if (line.startsWith("## Fase ") || line.startsWith("## Phase ")) {
+        currentPhase = line.replace(/^##\s*/, "").trim();
+        continue;
+      }
+
+      const taskMatch = line.match(/^###\s*\[([ xX])\]\s*(TASK-\d+):\s*(.+)$/);
+      if (taskMatch) {
+        if (currentTask) {
+          if (promptLines.length > 0) {
+            currentTask.aiPrompt = promptLines.join("\n").trim();
+          }
+          tasks.push(currentTask);
+        }
+
+        currentTask = {
+          id: taskMatch[2],
+          completed: taskMatch[1].toLowerCase() === "x",
+          title: taskMatch[3].trim(),
+          phase: currentPhase,
+          category: "General",
+          targetFiles: [],
+          description: "",
+          aiPrompt: "",
+          acceptanceCriteria: "",
+        };
+        promptLines = [];
+        inPromptBlock = false;
+        continue;
+      }
+
+      if (currentTask) {
+        if (line.startsWith("```markdown")) {
+          inPromptBlock = true;
+          continue;
+        }
+        if (inPromptBlock && line.startsWith("```")) {
+          inPromptBlock = false;
+          continue;
+        }
+        if (inPromptBlock) {
+          promptLines.push(line);
+          continue;
+        }
+
+        if (line.startsWith("- **Kategori:**")) {
+          currentTask.category = line.replace("- **Kategori:**", "").trim();
+        } else if (line.startsWith("- **File Target:**")) {
+          currentTask.targetFiles = line
+            .replace("- **File Target:**", "")
+            .split(",")
+            .map((f) => f.replace(/[`*]/g, "").trim());
+        } else if (line.startsWith("- **Deskripsi:**")) {
+          currentTask.description = line.replace("- **Deskripsi:**", "").trim();
+        } else if (line.startsWith("- **Kriteria Selesai:**")) {
+          currentTask.acceptanceCriteria = line.replace("- **Kriteria Selesai:**", "").trim();
+        }
+      }
+    }
+
+    if (currentTask) {
+      if (promptLines.length > 0) {
+        currentTask.aiPrompt = promptLines.join("\n").trim();
+      }
+      tasks.push(currentTask);
+    }
+
+    return tasks;
+  };
+
+  // Toggle Task Completion in tasks.md document
+  const handleToggleTask = async (taskId: string) => {
+    const tasksDocIndex = documents.findIndex((d) => d.filename === "tasks.md");
+    if (tasksDocIndex === -1) {
+      showNotice("File tasks.md belum ditemukan di proyek ini.");
+      return;
+    }
+
+    const tasksDoc = documents[tasksDocIndex];
+    let content = tasksDoc.content;
+
+    const uncheckedRegex = new RegExp(`###\\s*\\[ \\]\\s*${taskId}:`);
+    const checkedRegex = new RegExp(`###\\s*\\[[xX]\\]\\s*${taskId}:`);
+
+    let newStatusIsDone = false;
+    if (uncheckedRegex.test(content)) {
+      content = content.replace(uncheckedRegex, `### [x] ${taskId}:`);
+      newStatusIsDone = true;
+    } else if (checkedRegex.test(content)) {
+      content = content.replace(checkedRegex, `### [ ] ${taskId}:`);
+      newStatusIsDone = false;
+    } else {
+      return;
+    }
+
+    const updatedDocs = [...documents];
+    updatedDocs[tasksDocIndex] = { ...tasksDoc, content };
+    setDocuments(updatedDocs);
+
+    showNotice(`Task ${taskId} ditandai ${newStatusIsDone ? "SELESAI ✓" : "BELUM SELESAI"}`);
+
+    if (currentProject && tasksDoc.id) {
+      try {
+        await fetch(`/api/projects/${currentProject.id}/documents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            docId: tasksDoc.id,
+            filename: tasksDoc.filename,
+            content,
+          }),
+        });
+      } catch (err) {
+        console.error("Auto-sync task status error:", err);
+      }
+    }
+  };
+
+  // Copy Task Prompt to Clipboard
+  const handleCopyTaskPrompt = (task: TaskExecutionItem) => {
+    const promptText = `# TASK EXECUTION PROMPT: ${task.id} - ${task.title}\n` +
+      `# Target Project: ${currentProject?.name || meta.appName}\n` +
+      `# Phase: ${task.phase} | Category: ${task.category}\n` +
+      (task.targetFiles.length > 0 ? `# Target Files: ${task.targetFiles.join(", ")}\n` : "") +
+      `# Instructions for AI Coding Agent (Cursor / Claude / Antigravity / Windsurf):\n\n` +
+      `${task.aiPrompt || task.description}\n\n` +
+      (task.acceptanceCriteria ? `## Kriteria Keberhasilan:\n${task.acceptanceCriteria}\n` : "");
+
+    navigator.clipboard.writeText(promptText);
+    setCopiedTaskId(task.id);
+    showNotice(`✓ Prompt ${task.id} tersalin! Tempelkan ke AI coding agent Anda.`);
+    setTimeout(() => setCopiedTaskId(null), 3000);
   };
 
   const handleSaveProjectInfo = async () => {
@@ -525,6 +778,20 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
               <span>Wizard 7-Tahap</span>
             </button>
             <button
+              onClick={() => {
+                setActiveTab("cost");
+                setWorkspaceView("cost");
+              }}
+              className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
+                activeTab === "cost"
+                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  : "text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              <Calculator className="h-3.5 w-3.5 text-blue-400" />
+              <span>Kalkulator Biaya (RAB)</span>
+            </button>
+            <button
               onClick={() => setActiveTab("keys")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "keys"
@@ -602,34 +869,41 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                   </button>
                 </div>
 
-                {/* Preset Chips */}
-                <div className="pt-4 border-t border-border/60">
-                  <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider block mb-2">
-                    Inspirasi Cepat Template Arsitektur
-                  </span>
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {[
-                      { name: "SaaS Web Platform", desc: "Multi-tenant B2B Dashboard" },
-                      { name: "AI Agent Workflow", desc: "Autonomous LLM Pipeline" },
-                      { name: "Mobile FinTech", desc: "Payment Gateway & Ledger" },
-                      { name: "E-Commerce Microservice", desc: "Inventory & Checkout" },
-                    ].map((item) => (
-                      <button
-                        key={item.name}
+                {/* Architecture Template Presets (NgodingPakeAI Adaptation) */}
+                <div className="pt-5 border-t border-border/60 text-left">
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-xs font-semibold text-white flex items-center gap-1.5">
+                      <Code2 className="h-4 w-4 text-emerald-400" />
+                      <span>Pilih Template Codebase Siap Pakai</span>
+                    </span>
+                    <span className="text-[11px] text-zinc-500 font-mono">5 Preset Produksi</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {ARCHITECTURE_PRESETS.map((preset) => (
+                      <div
+                        key={preset.id}
                         onClick={() => {
-                          setMeta({
-                            ...meta,
-                            appName: item.name,
-                            category: item.desc,
-                            problem: `Membangun arsitektur terstandarisasi untuk ${item.name} (${item.desc}).`,
-                          });
+                          handleSelectPreset(preset);
                           setActiveTab("wizard");
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-surface-muted hover:bg-surface-elevated border border-border text-[11px] text-zinc-300 hover:text-white transition-all flex items-center gap-1.5"
+                        className="p-3 rounded-xl bg-surface-muted hover:bg-surface-elevated border border-border/70 hover:border-emerald-500/40 cursor-pointer transition-all text-left space-y-1.5 group"
                       >
-                        <span className="font-medium text-emerald-400">•</span>
-                        <span>{item.name}</span>
-                      </button>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                            {preset.name}
+                          </span>
+                          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {preset.badge}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 line-clamp-2 leading-relaxed">
+                          {preset.description}
+                        </p>
+                        <div className="flex items-center gap-1 text-[10px] text-emerald-400 pt-0.5 font-medium">
+                          <span>Gunakan template</span>
+                          <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -688,8 +962,295 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                   </div>
                 </div>
 
-                {/* Workspace Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Workspace View Mode Selector (Dokumen vs AI Task Runner) */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/70 pb-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setWorkspaceView("docs")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        workspaceView === "docs"
+                          ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      <FileText className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Dokumen Blueprint ({documents.length})</span>
+                    </button>
+                    <button
+                      onClick={() => setWorkspaceView("tasks")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        workspaceView === "tasks"
+                          ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      <ListTodo className="h-3.5 w-3.5 text-amber-400" />
+                      <span>AI Task Runner (Ngoding Mode)</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
+                        CLI Ready
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => setWorkspaceView("cost")}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                        workspaceView === "cost"
+                          ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      <Calculator className="h-3.5 w-3.5 text-blue-400" />
+                      <span>Kalkulator Biaya (RAB)</span>
+                      <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-500/10 text-blue-300 border border-blue-500/20 font-mono">
+                        Estimator
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="text-[11px] text-zinc-400 flex items-center gap-2">
+                    <Terminal className="h-3.5 w-3.5 text-zinc-500" />
+                    <span>Eksekusi Terminal:</span>
+                    <code
+                      onClick={() => {
+                        navigator.clipboard.writeText("node scripts/cli.js next");
+                        showNotice("Perintah CLI 'node scripts/cli.js next' disalin ke clipboard!");
+                      }}
+                      className="px-2 py-0.5 rounded bg-surface-muted text-emerald-400 font-mono cursor-pointer hover:bg-zinc-800 border border-border"
+                      title="Klik untuk salin perintah"
+                    >
+                      node scripts/cli.js next
+                    </code>
+                  </div>
+                </div>
+
+                {workspaceView === "cost" ? (
+                  <ProjectCostEstimator
+                    currentProject={currentProject}
+                    currentUser={currentUser}
+                    documents={documents}
+                    onDocumentSaved={handleRABDocumentSaved}
+                    onNotice={showNotice}
+                    onOpenWorkspaceDoc={handleOpenWorkspaceDoc}
+                  />
+                ) : workspaceView === "tasks" ? (
+                  /* ========================================================================= */
+                  /* AI TASK RUNNER VIEW (NGODING PAKE AI ADAPTATION)                          */
+                  /* ========================================================================= */
+                  <div className="space-y-6">
+                    {(() => {
+                      const tasksDoc = documents.find((d) => d.filename === "tasks.md");
+                      const allTasks = tasksDoc ? parseTasksFromMarkdown(tasksDoc.content) : [];
+                      const completedCount = allTasks.filter((t) => t.completed).length;
+                      const progressPct = allTasks.length > 0 ? Math.round((completedCount / allTasks.length) * 100) : 0;
+                      const phases = ["all", ...Array.from(new Set(allTasks.map((t) => t.phase)))];
+                      const displayedTasks =
+                        taskFilterPhase === "all"
+                          ? allTasks
+                          : allTasks.filter((t) => t.phase === taskFilterPhase);
+
+                      if (allTasks.length === 0) {
+                        return (
+                          <div className="p-8 rounded-xl bg-surface border border-border text-center space-y-4">
+                            <ListTodo className="h-8 w-8 text-amber-400 mx-auto" />
+                            <h3 className="text-base font-semibold text-white">Berkas tasks.md Belum Tersedia di Proyek Ini</h3>
+                            <p className="text-xs text-zinc-400 max-w-md mx-auto">
+                              Tambahkan dokumen tasks.md untuk mengaktifkan AI Task Runner yang membagi arsitektur menjadi langkah coding siap pakai.
+                            </p>
+                            <button
+                              onClick={() => {
+                                setNewDocFilename("tasks.md");
+                                setNewDocContent(`# Actionable AI Execution Tasks: ${currentProject.name}\n\n## Fase 1: Fondasi Skema Database & Storage\n### [ ] TASK-01: Migrasi DDL Tabel PostgreSQL Neon\n- **Kategori:** Database\n- **File Target:** scripts/migrate.js, src/lib/neon/db.ts\n- **Deskripsi:** Siapkan tabel utama sesuai database_schema.md.\n- **Prompt Eksekusi AI:\n\`\`\`markdown\nBertindaklah sebagai Database Engineer. Buat skrip migrasi DDL untuk aplikasi menggunakan driver @neondatabase/serverless.\n\`\`\`\n- **Kriteria Selesai:** Eksekusi skrip migrasi sukses tanpa error.\n`);
+                                setIsAddingDoc(true);
+                              }}
+                              className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
+                            >
+                              Buat Berkas tasks.md Sekarang
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-5">
+                          {/* Progress & CLI Banner */}
+                          <div className="p-4 rounded-xl bg-surface border border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-1.5 flex-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-medium text-white flex items-center gap-1.5">
+                                  <CheckSquare className="h-4 w-4 text-emerald-400" />
+                                  <span>Progres Eksekusi AI Coding</span>
+                                </span>
+                                <span className="font-mono text-zinc-300">
+                                  {completedCount} / {allTasks.length} Task ({progressPct}%)
+                                </span>
+                              </div>
+                              <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                                <div
+                                  className="h-full bg-emerald-500 transition-all duration-500 rounded-full"
+                                  style={{ width: `${progressPct}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const nextTask = allTasks.find((t) => !t.completed);
+                                  if (nextTask) {
+                                    handleCopyTaskPrompt(nextTask);
+                                  } else {
+                                    showNotice("Semua task telah selesai!");
+                                  }
+                                }}
+                                className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
+                              >
+                                <Sparkles className="h-3.5 w-3.5" />
+                                <span>Salin Prompt Task Berikutnya</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Phase Filter Tabs */}
+                          <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+                            {phases.map((ph) => (
+                              <button
+                                key={ph}
+                                onClick={() => setTaskFilterPhase(ph)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                                  taskFilterPhase === ph
+                                    ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
+                                    : "bg-surface-muted text-zinc-400 hover:text-zinc-200 border border-transparent"
+                                }`}
+                              >
+                                {ph === "all" ? "Semua Fase" : ph}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Task Cards List */}
+                          <div className="space-y-3">
+                            {displayedTasks.map((t) => {
+                              const isPromptExpanded = expandedTaskPrompts[t.id];
+                              return (
+                                <div
+                                  key={t.id}
+                                  className={`p-4 rounded-xl border transition-all ${
+                                    t.completed
+                                      ? "bg-surface/50 border-border/50 opacity-75"
+                                      : "bg-surface border-border hover:border-zinc-700"
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-4">
+                                    <div className="flex items-start gap-3 min-w-0">
+                                      <button
+                                        onClick={() => handleToggleTask(t.id)}
+                                        className={`mt-0.5 h-5 w-5 rounded flex items-center justify-center transition-all ${
+                                          t.completed
+                                            ? "bg-emerald-500 text-zinc-950"
+                                            : "border border-zinc-600 hover:border-emerald-400"
+                                        }`}
+                                        title={t.completed ? "Tandai belum selesai" : "Tandai selesai"}
+                                      >
+                                        {t.completed && <CheckCircle2 className="h-4 w-4" />}
+                                      </button>
+
+                                      <div className="space-y-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="font-mono text-xs font-bold text-white">{t.id}</span>
+                                          <span className="px-2 py-0.5 rounded text-[10px] bg-zinc-800 text-zinc-400 border border-border font-medium">
+                                            {t.category}
+                                          </span>
+                                          <span className="text-xs text-zinc-500">•</span>
+                                          <span className="text-[11px] text-zinc-400">{t.phase}</span>
+                                        </div>
+
+                                        <h4
+                                          className={`text-sm font-semibold ${
+                                            t.completed ? "line-through text-zinc-400" : "text-zinc-100"
+                                          }`}
+                                        >
+                                          {t.title}
+                                        </h4>
+
+                                        {t.description && (
+                                          <p className="text-xs text-zinc-400 leading-relaxed">{t.description}</p>
+                                        )}
+
+                                        {t.targetFiles.length > 0 && (
+                                          <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                            <span className="text-[10px] text-zinc-500">Target:</span>
+                                            {t.targetFiles.map((file) => (
+                                              <span
+                                                key={file}
+                                                className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-zinc-800/80 text-zinc-300 border border-border"
+                                              >
+                                                {file}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <button
+                                        onClick={() => handleCopyTaskPrompt(t)}
+                                        className="px-2.5 py-1.5 rounded-md bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium flex items-center gap-1 transition-all active:scale-95"
+                                        title="Salin Prompt Khusus Task Ini untuk AI Agent"
+                                      >
+                                        {copiedTaskId === t.id ? (
+                                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                        ) : (
+                                          <Copy className="h-3.5 w-3.5" />
+                                        )}
+                                        <span>{copiedTaskId === t.id ? "Tersalin" : "Salin Prompt"}</span>
+                                      </button>
+
+                                      {t.aiPrompt && (
+                                        <button
+                                          onClick={() =>
+                                            setExpandedTaskPrompts((prev) => ({
+                                              ...prev,
+                                              [t.id]: !prev[t.id],
+                                            }))
+                                          }
+                                          className="px-2.5 py-1.5 rounded-md bg-surface-elevated hover:bg-zinc-700 text-zinc-300 border border-border text-xs transition-all"
+                                        >
+                                          {isPromptExpanded ? "Tutup Prompt" : "Lihat Prompt"}
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {isPromptExpanded && t.aiPrompt && (
+                                    <div className="mt-3 p-3 rounded-lg bg-surface-muted border border-border/80 space-y-2">
+                                      <div className="text-[11px] font-mono text-zinc-400 flex items-center justify-between">
+                                        <span>Prompt AI Siap Eksekusi:</span>
+                                        <span className="text-[10px] text-emerald-400">Siap tempel ke Cursor / Claude</span>
+                                      </div>
+                                      <pre className="text-xs text-zinc-300 whitespace-pre-wrap font-mono bg-zinc-950 p-2.5 rounded border border-border/60 overflow-x-auto">
+                                        {t.aiPrompt}
+                                      </pre>
+                                      {t.acceptanceCriteria && (
+                                        <div className="text-[11px] text-zinc-400 pt-1">
+                                          <span className="font-semibold text-emerald-400">Kriteria Selesai: </span>
+                                          {t.acceptanceCriteria}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                ) : (
+                  /* ========================================================================= */
+                  /* DOKUMEN BLUEPRINT VIEW (ORIGINAL WORKSPACE GRID)                          */
+                  /* ========================================================================= */
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                   {/* File List */}
                   <div className="lg:col-span-4 space-y-2">
                     <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 px-1 mb-2 flex items-center justify-between">
@@ -797,6 +1358,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                     )}
                   </div>
                 </div>
+                )}
               </div>
             )}
           </div>
@@ -919,6 +1481,18 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                           <span>Buka Workspace</span>
                         </button>
                         <button
+                          onClick={() => {
+                            handleOpenProject(p);
+                            setWorkspaceView("cost");
+                            setActiveTab("workspace");
+                          }}
+                          className="px-2.5 py-1 rounded bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-medium flex items-center gap-1 transition-all"
+                          title="Hitung Biaya & RAB Klien"
+                        >
+                          <Calculator className="h-3 w-3" />
+                          <span>Hitung RAB</span>
+                        </button>
+                        <button
                           onClick={() => setEditingProject(p)}
                           className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all"
                           title="Edit Info Proyek"
@@ -975,8 +1549,43 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
             <div className="p-6 rounded-xl bg-surface border border-border space-y-4">
               {wizardStep === 1 && (
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-white">Tahap 1: Nama & Kategori Aplikasi</h3>
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">Tahap 1: Nama & Kategori Aplikasi</h3>
+                    <span className="text-[11px] text-zinc-500 font-mono">Langkah 1 dari 4</span>
+                  </div>
+
+                  {/* Architecture Preset Quick Selector */}
+                  <div className="p-3.5 rounded-xl bg-surface-muted/60 border border-border/80 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
+                        <Code2 className="h-3.5 w-3.5 text-emerald-400" />
+                        <span>Pilih Preset Template Cepat (Opsional)</span>
+                      </span>
+                      <span className="text-[10px] text-zinc-500 font-mono">1-Klik Auto-Fill</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {ARCHITECTURE_PRESETS.map((preset) => (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          onClick={() => handleSelectPreset(preset)}
+                          className="p-2.5 rounded-lg bg-surface hover:bg-surface-elevated border border-border/70 hover:border-emerald-500/40 transition-all text-left space-y-1 group"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">
+                              {preset.name}
+                            </span>
+                            <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-400">
+                              {preset.badge}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-zinc-400 line-clamp-1">{preset.description}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
                     <label className="text-xs text-zinc-300">Nama Aplikasi</label>
                     <input
@@ -1002,9 +1611,37 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
               {wizardStep === 2 && (
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-white">Tahap 2: Detail Masalah & Tagline</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">Tahap 2: Detail Masalah & Tagline</h3>
+                    <span className="text-[11px] text-zinc-500 font-mono">Dikte Suara Tersedia 🎤</span>
+                  </div>
+
                   <div className="space-y-2">
-                    <label className="text-xs text-zinc-300">Tagline Produk</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-zinc-300">Tagline Produk</label>
+                      <button
+                        type="button"
+                        onClick={() => handleStartSpeech("tagline")}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-all ${
+                          isListening && speechTarget === "tagline"
+                            ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"
+                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-border"
+                        }`}
+                        title="Diktekan tagline dengan suara Anda"
+                      >
+                        {isListening && speechTarget === "tagline" ? (
+                          <>
+                            <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                            <span>Mendengarkan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="h-3 w-3 text-emerald-400" />
+                            <span>Input Suara</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <input
                       type="text"
                       placeholder="Contoh: Solusi terstandarisasi perencanaan blueprint aplikasi lengkap."
@@ -1013,11 +1650,36 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                       className="w-full px-3 py-2 rounded-md bg-surface-muted border border-border text-white text-xs focus:outline-none focus:border-emerald-500"
                     />
                   </div>
+
                   <div className="space-y-2">
-                    <label className="text-xs text-zinc-300">Masalah Inti yang Dipecahkan</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs text-zinc-300">Masalah Inti yang Dipecahkan</label>
+                      <button
+                        type="button"
+                        onClick={() => handleStartSpeech("problem")}
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium flex items-center gap-1 transition-all ${
+                          isListening && speechTarget === "problem"
+                            ? "bg-rose-500/20 text-rose-300 border border-rose-500/40 animate-pulse"
+                            : "bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-border"
+                        }`}
+                        title="Diktekan masalah inti produk dengan suara Anda"
+                      >
+                        {isListening && speechTarget === "problem" ? (
+                          <>
+                            <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+                            <span>Mendengarkan...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Mic className="h-3 w-3 text-emerald-400" />
+                            <span>Input Suara</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                     <textarea
-                      rows={3}
-                      placeholder="Jelaskan masalah utama pengguna Anda..."
+                      rows={4}
+                      placeholder="Jelaskan masalah utama pengguna Anda (atau klik 'Input Suara' untuk mendiktekan)..."
                       value={meta.problem}
                       onChange={(e) => setMeta({ ...meta, problem: e.target.value })}
                       className="w-full px-3 py-2 rounded-md bg-surface-muted border border-border text-white text-xs focus:outline-none focus:border-emerald-500"
@@ -1429,6 +2091,46 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 5: PROJECT COST ESTIMATOR & RAB COUNTER                               */}
+        {/* ========================================================================= */}
+        {activeTab === "cost" && (
+          <div className="space-y-6">
+            {/* Project Switcher Bar if projects exist */}
+            {projects.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-surface border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4 text-emerald-400" />
+                  <span className="text-xs text-zinc-300 font-medium">Pilih Proyek Aktif untuk Estimasi Biaya (RAB):</span>
+                </div>
+                <select
+                  value={currentProject?.id || ""}
+                  onChange={(e) => {
+                    const selected = projects.find((p) => p.id === e.target.value);
+                    if (selected) handleOpenProject(selected);
+                  }}
+                  className="bg-surface-elevated border border-border text-xs text-white rounded-lg px-3 py-1.5 focus:border-emerald-500 focus:outline-none"
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <ProjectCostEstimator
+              currentProject={currentProject}
+              currentUser={currentUser}
+              documents={documents}
+              onDocumentSaved={handleRABDocumentSaved}
+              onNotice={showNotice}
+              onOpenWorkspaceDoc={handleOpenWorkspaceDoc}
+            />
           </div>
         )}
       </main>

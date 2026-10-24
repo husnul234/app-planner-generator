@@ -18,6 +18,127 @@ export interface ProjectMeta {
   selectedModel: string;
 }
 
+export interface ArchitecturePreset {
+  id: string;
+  name: string;
+  badge: string;
+  description: string;
+  meta: ProjectMeta;
+}
+
+export const ARCHITECTURE_PRESETS: ArchitecturePreset[] = [
+  {
+    id: "fullstack-saas",
+    name: "Fullstack SaaS Platform",
+    badge: "Populer",
+    description: "Template SaaS lengkap dengan auth JWKS, database serverless, billing, dan role admin/user.",
+    meta: {
+      appName: "CloudScale SaaS",
+      category: "SaaS Web Platform",
+      tagline: "Platform SaaS modern dengan arsitektur serverless scalable dan auth terintegrasi.",
+      problem: "Kompleksitas setup infrastruktur database, auth, dan billing berulang saat membangun SaaS baru.",
+      targetAudience: "Indie Hackers, Solo Founders, dan Engineering Teams",
+      coreFeatures: [
+        "Autentikasi & RBAC (Admin/User)",
+        "Manajemen Langganan & Billing Midtrans/Stripe",
+        "Dashboard Metrik & Analitik Realtime",
+        "API Token & Webhook Gateway",
+      ],
+      techStack: ["Next.js 15 App Router", "Neon PostgreSQL Serverless", "Neon Object Storage", "TailwindCSS", "Cloudflare Pages"],
+      dbType: "Neon PostgreSQL (@neondatabase/serverless)",
+      selectedModel: "Google Gemini 3.8 Flash",
+    },
+  },
+  {
+    id: "ai-agent-platform",
+    name: "AI Agent & Chatbot Hub",
+    badge: "AI Native",
+    description: "Arsitektur multi-LLM pool dengan streaming SSE, rotasi kunci BYOK, dan task breakdown.",
+    meta: {
+      appName: "AgentCraft AI",
+      category: "AI Tool & Agentic Workflow",
+      tagline: "Platform orkestrasi agent AI multi-model dengan streaming respon dan memory.",
+      problem: "Context drift, rate limit LLM tunggal, dan mahalnya biaya inferensi tanpa sistem pooling cerdas.",
+      targetAudience: "AI Engineers, Content Creators, dan Enterprise Automation Teams",
+      coreFeatures: [
+        "Kolam Multi-Key Gemini/Claude BYOK",
+        "Streaming Chat SSE dengan Markdown Preview",
+        "Vector Knowledge Base & RAG Memory",
+        "Execution Task Breakdown Export",
+      ],
+      techStack: ["Next.js 15", "Neon Serverless Postgres", "Google Gemini 3.8 Flash Pool", "TailwindCSS"],
+      dbType: "Neon PostgreSQL (@neondatabase/serverless)",
+      selectedModel: "Google Gemini 3.8 Flash",
+    },
+  },
+  {
+    id: "ecommerce-marketplace",
+    name: "E-Commerce & Digital Store",
+    badge: "Transaksi",
+    description: "Katalog produk super cepat, keranjang belanja, checkout QRIS/Virtual Account, dan tracking stok.",
+    meta: {
+      appName: "MarketForge Store",
+      category: "E-Commerce & Digital Goods",
+      tagline: "Platform toko online cepat dengan manajemen inventori otomatis dan checkout instan.",
+      problem: "Lambatnya loading catalog produk dan kesulitan sinkronisasi stok multi-channel secara real-time.",
+      targetAudience: "Merchant Online, Brand Lokal, dan Pelaku UMKM Digital",
+      coreFeatures: [
+        "Katalog Produk & Filter Kategori Cepat",
+        "Keranjang Belanja & Payment Gateway QRIS/VA",
+        "Order Tracking & Notifikasi WhatsApp",
+        "Admin Stock Inventory & Sales Report",
+      ],
+      techStack: ["Next.js 15", "Neon PostgreSQL Serverless", "Neon Object Storage (Media)", "TailwindCSS"],
+      dbType: "Neon PostgreSQL (@neondatabase/serverless)",
+      selectedModel: "Google Gemini 3.5 Flash Lite",
+    },
+  },
+  {
+    id: "internal-crm",
+    name: "Operations & Sales CRM",
+    badge: "Enterprise",
+    description: "Pipeline deals kanban, manajemen kontak leads, audit log keamanan, dan laporan berkala.",
+    meta: {
+      appName: "OpsFlow CRM",
+      category: "Enterprise Operations & CRM",
+      tagline: "Sistem operasi bisnis internal untuk manajemen leads, pipeline deal, dan performa tim.",
+      problem: "Data pelanggan tersebar di spreadsheet tidak terenkripsi tanpa audit trail aktivitas tim.",
+      targetAudience: "Sales Teams, Operation Leads, dan Pelaku Bisnis B2B",
+      coreFeatures: [
+        "Visual Kanban Pipeline Deal & Leads",
+        "Role-Based Access Control (Admin, Manager, Staff)",
+        "Audit Trail Aktivitas & Log Perubahan Data",
+        "Ekspor Laporan PDF & Data Tables",
+      ],
+      techStack: ["Next.js 15", "Neon PostgreSQL Serverless", "Neon Auth JWKS", "TailwindCSS"],
+      dbType: "Neon PostgreSQL (@neondatabase/serverless)",
+      selectedModel: "Google Gemini 3.8 Flash",
+    },
+  },
+  {
+    id: "mobile-api-backend",
+    name: "Mobile Edge API Backend",
+    badge: "Edge API",
+    description: "Backend API berlatensi ultra-rendah untuk Flutter / React Native dengan upload S3 & notifikasi.",
+    meta: {
+      appName: "AppCore Edge API",
+      category: "Mobile Backend & API Gateway",
+      tagline: "Backend API berkecepatan tinggi untuk mobile app dengan otentikasi aman dan penyimpanan aset.",
+      problem: "Latensi tinggi cold-start serverless tradisional dan biaya database cloud yang membengkak.",
+      targetAudience: "Mobile App Developers & Fullstack Engineers",
+      coreFeatures: [
+        "REST Endpoints Berlatensi Rendah di Edge",
+        "Token-Based JWT Auth dengan Refresh Token",
+        "Push Notification Service Integration",
+        "Upload Media S3 Bucket dengan Presigned URL",
+      ],
+      techStack: ["Next.js Edge Runtime", "Neon PostgreSQL (@neondatabase/serverless)", "Neon Object Storage", "JWT / JWKS"],
+      dbType: "Neon PostgreSQL (@neondatabase/serverless)",
+      selectedModel: "Google Gemini 2.5 Flash",
+    },
+  },
+];
+
 export const BLUEPRINT_DOCUMENTS: BlueprintDoc[] = [
   {
     filename: "PRD.md",
@@ -272,6 +393,152 @@ Root /
 - **Konteks:** Membutuhkan database PostgreSQL dan penyimpanan objek tanpa manajemen server fisik yang kompatibel dengan runtime Cloudflare Pages.
 - **Keputusan:** Menggunakan \`@neondatabase/serverless\` dan Neon Object Storage (S3 API).
 - **Konsekuensi:** Latensi rendah, koneksi HTTP pooling yang tidak melanggar batas koneksi serverless.
+`,
+  },
+  {
+    filename: "tasks.md",
+    file_slug: "tasks",
+    title: "Actionable AI Execution Tasks & Milestones",
+    description: "Daftar task granular bertahap yang siap dieksekusi langsung oleh AI coding agent (Cursor/Claude/Antigravity) satu per satu.",
+    defaultContent: (meta) => `# Actionable AI Execution Tasks: ${meta.appName}
+> **Panduan Eksekusi AI Coding (NgodingPakeAI Style):**
+> Eksekusi task di bawah ini secara sekuensial (satu per satu). Berikan prompt spesifik tiap task kepada coding agent Anda untuk mencegah context drift dan halusinasi skema.
+
+---
+
+## Ringkasan Eksekusi Proyek
+- **Nama Aplikasi:** ${meta.appName}
+- **Tech Stack:** ${meta.techStack?.join(", ") || "Next.js 15, Neon Postgres, TailwindCSS"}
+- **Database:** ${meta.dbType || "Neon PostgreSQL (@neondatabase/serverless)"}
+- **Metode Eksekusi:** Jalankan \`node scripts/cli.js next\` atau salin prompt tiap task di bawah ke AI Agent.
+
+---
+
+## Fase 1: Fondasi Skema Database & Storage
+
+### [ ] TASK-01: Migrasi DDL Tabel PostgreSQL Neon
+- **Kategori:** Database
+- **File Target:** \`scripts/migrate.js\`, \`src/lib/neon/db.ts\`
+- **Deskripsi:** Siapkan tabel utama sesuai dengan spesifikasi \`database_schema.md\`.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Bertindaklah sebagai Database Engineer. Buat skrip migrasi DDL untuk aplikasi "${meta.appName}" menggunakan driver @neondatabase/serverless.
+Tabel yang wajib dibuat:
+1. profiles (id, email, full_name, role, created_at)
+2. projects (id, name, slug, status, created_at)
+3. core_data (sesuai kebutuhan fitur: ${meta.coreFeatures?.slice(0, 2).join(", ") || "fitur utama"})
+Pastikan menambahkan indeks performa, foreign key yang konsisten, dan connection pooling HTTP.
+\`\`\`
+- **Kriteria Selesai:** Eksekusi skrip migrasi sukses tanpa error sintaks SQL.
+
+### [ ] TASK-02: Konfigurasi Client Database & Object Storage
+- **Kategori:** Infrastruktur & SDK
+- **File Target:** \`src/lib/neon/db.ts\`, \`src/lib/neon/storage.ts\`
+- **Deskripsi:** Inisialisasi pool koneksi Postgres serverless dan S3 client untuk upload aset.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Implementasikan helper database Neon dan Object Storage S3 di TypeScript.
+Fungsi yang dibutuhkan:
+- query(sql, params): Eksekusi kueri terisolasi SQL Injection
+- uploadObject(key, buffer, contentType): Upload file ke Neon Object Storage
+- getObjectUrl(key): Dapatkan URL publik/presigned
+Gunakan environment variable DATABASE_URL dan AWS_S3_* yang aman.
+\`\`\`
+- **Kriteria Selesai:** Script uji koneksi berhasil mengembalikan versi database dan ping S3.
+
+---
+
+## Fase 2: Autentikasi & Core Backend Endpoints
+
+### [ ] TASK-03: Sistem Autentikasi & RBAC
+- **Kategori:** Backend & Auth
+- **File Target:** \`src/lib/neon/auth.ts\`, \`src/app/api/auth/route.ts\`
+- **Deskripsi:** Integrasikan autentikasi berbasis JWKS / Session dengan pemisahan role Admin & User.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Bangun sistem autentikasi untuk ${meta.appName}.
+Kebutuhan:
+- Validasi JWT / JWKS Neon Auth
+- Middleware otorisasi role (admin vs user)
+- Endpoint /api/auth untuk registrasi, login, dan verifikasi session pengguna
+\`\`\`
+- **Kriteria Selesai:** Endpoint login mengembalikan token valid dan middleware menolak akses tidak terotorisasi.
+
+### [ ] TASK-04: REST API Fitur Utama
+- **Kategori:** Backend API
+- **File Target:** \`src/app/api/.../route.ts\`
+- **Deskripsi:** Buat endpoint API sesuai kontrak di \`api_spec.md\` untuk mendukung: ${meta.coreFeatures?.join(", ") || "fitur utama"}.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Implementasikan endpoint REST API berikut sesuai spesifikasi api_spec.md:
+${meta.coreFeatures?.map((f, i) => `${i + 1}. Endpoint untuk operasi: ${f}`).join("\n") || "1. CRUD fitur utama"}
+Pastikan format response JSON terstandarisasi: { success: boolean, data?: any, error?: string }.
+Validasi input request menggunakan type checker yang aman.
+\`\`\`
+- **Kriteria Selesai:** Seluruh endpoint merespons HTTP 200 dengan payload JSON yang sesuai spesifikasi.
+
+---
+
+## Fase 3: Antarmuka Frontend & State Management
+
+### [ ] TASK-05: Setup Design System & Shared Layout
+- **Kategori:** Frontend UI
+- **File Target:** \`src/app/globals.css\`, \`tailwind.config.ts\`, \`src/components/layout/Shell.tsx\`
+- **Deskripsi:** Terapkan semantic tokens sesuai \`design_sistem.md\` (warna deep dark, aksen emerald/cobalt, font sans & mono).
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Konfigurasikan tema TailwindCSS dan layout global untuk ${meta.appName}.
+Patuhi aturan Anti-Slop Frontend:
+- Tidak boleh menggunakan font generic Inter biasa, gunakan Geist atau font modern sans
+- Navigasi single-line dengan tinggi 64px
+- Warna latar belakang off-black (#090d16) dan elevated surface (#0f172a)
+- Komponen Navbar dengan profil user dan switcher role
+\`\`\`
+- **Kriteria Selesai:** Layout responsif di desktop (1440px) dan mobile (390px) tanpa overflow horizontal.
+
+### [ ] TASK-06: Implementasi Halaman Dashboard & Interaksi Fitur
+- **Kategori:** Frontend UI
+- **File Target:** \`src/components/dashboard/...\`, \`src/app/page.tsx\`
+- **Deskripsi:** Bangun tampilan antarmuka interaktif berdasarkan sketsa layout \`wireframes.md\`.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Buat komponen dashboard interaktif untuk ${meta.appName}.
+Fitur yang harus ada:
+- List data dengan pencarian dan filter status
+- Form input atau wizard untuk fitur: ${meta.coreFeatures?.[0] || "Fitur 1"}
+- State management reaktif dengan optimistik update dan feedback loading/error toast
+\`\`\`
+- **Kriteria Selesai:** Pengguna dapat melakukan input data dan melihat perubahan data secara real-time.
+
+---
+
+## Fase 4: Integrasi AI, Observability & Deployment
+
+### [ ] TASK-07: AI Agent Integration & Gateway
+- **Kategori:** AI Gateway
+- **File Target:** \`src/lib/ai/...\`
+- **Deskripsi:** Integrasikan inferensi AI (${meta.selectedModel || "Google Gemini"}) dengan multi-key pool dan mekanisme fallback.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Bangun gateway AI dengan sistem rotasi multi-key untuk model ${meta.selectedModel || "Gemini 3.8 Flash"}.
+- Tangani error HTTP 429 (Rate Limit) dengan auto-switch ke key berikutnya
+- Rantai model fallback jika model utama overload
+- Estimasi token usage untuk monitoring kuota
+\`\`\`
+- **Kriteria Selesai:** Inferensi AI berhasil mengeksekusi prompt dan rotasi kunci berjalan saat disimulasikan error.
+
+### [ ] TASK-08: Pre-flight Verification & Cloudflare Pages Deploy
+- **Kategori:** DevOps & QA
+- **File Target:** \`package.json\`, \`wrangler.toml\`, \`qa.md\`
+- **Deskripsi:** Jalankan audit build, zero-lint error, dan persiapkan konfigurasi edge Cloudflare Pages.
+- **Prompt Eksekusi AI:**
+\`\`\`markdown
+Lakukan final pre-flight check untuk ${meta.appName}:
+1. Jalankan TypeScript compile check dan build verifikasi (npm run build)
+2. Pastikan tidak ada environment variable rahasia yang bocor ke bundle client
+3. Konfigurasikan wrangler.toml untuk deployment ke Cloudflare Pages / Workers
+\`\`\`
+- **Kriteria Selesai:** \`npm run build\` keluar dengan exit code 0 tanpa peringatan fatal.
 `,
   },
 ];

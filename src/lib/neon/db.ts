@@ -201,6 +201,7 @@ export interface ProfileRecord {
   avatar_url: string | null;
   role: "admin" | "user";
   credits_remaining: number;
+  custom_settings?: Record<string, any>;
   created_at: string;
 }
 
@@ -215,7 +216,7 @@ export interface InvitationRecord {
 
 export async function listProfiles(): Promise<ProfileRecord[]> {
   const rows = await sql`
-    SELECT id, email, full_name, avatar_url, role, credits_remaining, created_at
+    SELECT id, email, full_name, avatar_url, role, credits_remaining, custom_settings, created_at
     FROM public.profiles
     ORDER BY created_at ASC;
   `;
@@ -224,7 +225,7 @@ export async function listProfiles(): Promise<ProfileRecord[]> {
 
 export async function getProfileByEmail(email: string): Promise<ProfileRecord | null> {
   const rows = await sql`
-    SELECT id, email, full_name, avatar_url, role, credits_remaining, created_at
+    SELECT id, email, full_name, avatar_url, role, credits_remaining, custom_settings, created_at
     FROM public.profiles
     WHERE LOWER(email) = LOWER(${email.trim()})
     LIMIT 1;
@@ -234,7 +235,7 @@ export async function getProfileByEmail(email: string): Promise<ProfileRecord | 
 
 export async function getProfileById(id: string): Promise<ProfileRecord | null> {
   const rows = await sql`
-    SELECT id, email, full_name, avatar_url, role, credits_remaining, created_at
+    SELECT id, email, full_name, avatar_url, role, credits_remaining, custom_settings, created_at
     FROM public.profiles
     WHERE id = ${id}
     LIMIT 1;
@@ -248,11 +249,13 @@ export async function createOrUpdateProfile(data: {
   full_name?: string;
   role?: "admin" | "user";
   credits_remaining?: number;
+  custom_settings?: Record<string, any>;
 }): Promise<ProfileRecord> {
   const userId = data.id || crypto.randomUUID();
   const role = data.role || "user";
   const name = data.full_name || data.email.split("@")[0];
   const credits = data.credits_remaining ?? 10;
+  const settings = JSON.stringify(data.custom_settings || {});
 
   // Sync to neon_auth.user first to satisfy foreign key
   await sql`
@@ -262,15 +265,29 @@ export async function createOrUpdateProfile(data: {
   `;
 
   const rows = await sql`
-    INSERT INTO public.profiles (id, email, full_name, role, credits_remaining)
-    VALUES (${userId}, ${data.email}, ${name}, ${role}, ${credits})
+    INSERT INTO public.profiles (id, email, full_name, role, credits_remaining, custom_settings)
+    VALUES (${userId}, ${data.email}, ${name}, ${role}, ${credits}, ${settings}::jsonb)
     ON CONFLICT (id) DO UPDATE SET
       email = EXCLUDED.email,
       full_name = EXCLUDED.full_name,
       role = EXCLUDED.role,
       credits_remaining = EXCLUDED.credits_remaining,
       updated_at = NOW()
-    RETURNING id, email, full_name, avatar_url, role, credits_remaining, created_at;
+    RETURNING id, email, full_name, avatar_url, role, credits_remaining, custom_settings, created_at;
+  `;
+  return rows[0] as unknown as ProfileRecord;
+}
+
+export async function updateProfileCustomSettings(
+  id: string,
+  customSettings: Record<string, any>
+): Promise<ProfileRecord> {
+  const settingsJson = JSON.stringify(customSettings);
+  const rows = await sql`
+    UPDATE public.profiles
+    SET custom_settings = ${settingsJson}::jsonb, updated_at = NOW()
+    WHERE id = ${id}
+    RETURNING id, email, full_name, avatar_url, role, credits_remaining, custom_settings, created_at;
   `;
   return rows[0] as unknown as ProfileRecord;
 }
