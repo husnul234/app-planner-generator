@@ -115,8 +115,8 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
   // Deepen Document with AI State
   const [isDeepeningDoc, setIsDeepeningDoc] = useState(false);
 
-  // IDE Chat Co-Pilot State (Edit & Revise via Chat)
-  const [showChatEdit, setShowChatEdit] = useState(false);
+  // IDE Chat Co-Pilot State (Edit & Revise via Chat) - Default true for side-by-side IDE experience
+  const [showChatEdit, setShowChatEdit] = useState(true);
   const [chatMessages, setChatMessages] = useState<Array<{
     id: string;
     role: "user" | "assistant";
@@ -1928,15 +1928,15 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                                 onClick={() => setShowChatEdit(!showChatEdit)}
                                 className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 border ${
                                   showChatEdit
-                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-cyan-950/40"
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-cyan-950/40 ring-1 ring-cyan-500/30"
                                     : "bg-surface-elevated hover:bg-zinc-700 text-zinc-200 border-border"
                                 }`}
-                                title="Buka Co-Pilot AI untuk merevisi dokumen ini via chat (gaya Cursor / Lovable)"
+                                title={showChatEdit ? "Tutup panel Chat Co-Pilot" : "Buka Co-Pilot AI untuk merevisi dokumen via chat (gaya Cursor / Lovable)"}
                               >
                                 <MessageSquareCode className="h-3.5 w-3.5 text-cyan-400" />
-                                <span>Revisi via Chat</span>
-                                <span className="px-1 py-0.2 rounded text-[9px] bg-cyan-500/20 text-cyan-300 font-mono">
-                                  IDE
+                                <span>{showChatEdit ? "Tutup Chat IDE" : "Buka Chat IDE"}</span>
+                                <span className={`px-1 py-0.2 rounded text-[9px] font-mono ${showChatEdit ? "bg-cyan-400 text-zinc-950 font-bold" : "bg-cyan-500/20 text-cyan-300"}`}>
+                                  {showChatEdit ? "AKTIF" : "IDE"}
                                 </span>
                               </button>
 
@@ -2002,11 +2002,11 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                                     rows={22}
                                     value={editedDocContent}
                                     onChange={(e) => setEditedDocContent(e.target.value)}
-                                    className="w-full h-full p-4 rounded-lg bg-surface-muted border border-border text-zinc-200 font-mono text-xs leading-relaxed focus:outline-none focus:border-emerald-500"
+                                    className="w-full h-full p-4 rounded-lg bg-surface-muted border border-border text-zinc-100 font-sans text-sm leading-relaxed focus:outline-none focus:border-emerald-500"
                                   />
                                 </div>
                               ) : (
-                                <div className="p-4 sm:p-6 overflow-y-auto max-h-[640px] font-mono text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
+                                <div className="p-4 sm:p-6 overflow-y-auto max-h-[640px] font-sans text-[13.5px] sm:text-[14px] text-zinc-200 leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
                                   {activeDoc.content}
                                 </div>
                               )}
