@@ -33,6 +33,9 @@ import {
   Code2,
   Calculator,
   Sliders,
+  Upload,
+  FileUp,
+  FileArchive,
 } from "lucide-react";
 import { ProfileItem, ProjectItem, DocItem, ApiKeyItem, ProjectMeta, TaskExecutionItem } from "../../types";
 import { ARCHITECTURE_PRESETS, ArchitecturePreset } from "../../lib/generator/templates";
@@ -76,20 +79,35 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
   const [editingProject, setEditingProject] = useState<ProjectItem | null>(null);
   const [deleteConfirmProject, setDeleteConfirmProject] = useState<ProjectItem | null>(null);
 
-  // Wizard State
-  const [wizardStep, setWizardStep] = useState(1);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [meta, setMeta] = useState<ProjectMeta>({
+  // Initial clean metadata factory
+  const getInitialMeta = (): ProjectMeta => ({
     appName: "",
-    category: "SaaS Web Platform",
+    category: "Kasir POS & F&B Management",
     tagline: "",
     problem: "",
-    targetAudience: "Engineering Teams & Developers",
-    coreFeatures: ["Autentikasi Pengguna & Role", "Generator Arsitektur Terpadu", "Ekspor Markdown & ZIP"],
-    techStack: ["Next.js 15", "Neon PostgreSQL", "Neon Object Storage", "TailwindCSS"],
+    targetAudience: "",
+    coreFeatures: [],
+    techStack: ["Next.js 15", "Neon PostgreSQL (@neondatabase/serverless)", "TailwindCSS"],
     dbType: "Neon PostgreSQL (@neondatabase/serverless)",
     selectedModel: "Google Gemini 3.8 Flash",
   });
+
+  // Wizard State
+  const [wizardStep, setWizardStep] = useState(1);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [meta, setMeta] = useState<ProjectMeta>(getInitialMeta);
+  const [featuresText, setFeaturesText] = useState("");
+
+  // Import Planning Documents (MD or ZIP) State
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importProjectName, setImportProjectName] = useState("");
+  const [importProjectIdea, setImportProjectIdea] = useState("");
+  const [importDocs, setImportDocs] = useState<{ filename: string; content: string; size: number }[]>([]);
+  const [isProcessingImport, setIsProcessingImport] = useState(false);
+  const [isSavingImport, setIsSavingImport] = useState(false);
+
+  // Deepen Document with AI State
+  const [isDeepeningDoc, setIsDeepeningDoc] = useState(false);
 
   // Personal BYOK Keys State
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
@@ -377,10 +395,175 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
     }
   };
 
+  // Start Clean New Project Handler (Zero Previous Data)
+  const handleStartNewProject = () => {
+    setMeta(getInitialMeta());
+    setFeaturesText("");
+    setWizardStep(1);
+    setActiveTab("wizard");
+    showNotice("Formulir proyek baru siap diisi dari awal.");
+  };
+
   // Preset Selection Handler
   const handleSelectPreset = (preset: ArchitecturePreset) => {
     setMeta({ ...preset.meta });
+    setFeaturesText(preset.meta.coreFeatures ? preset.meta.coreFeatures.join("\n") : "");
     showNotice(`✓ Template codebase "${preset.name}" berhasil dimuat!`);
+  };
+
+  // Deepen Document with AI Handler
+  const handleDeepenActiveDoc = async () => {
+    const activeDoc = documents[selectedDocIndex];
+    if (!activeDoc || !currentProject) return;
+
+    setIsDeepeningDoc(true);
+    showNotice(`Sedang meminta AI Gemini memperdalam spesifikasi ${activeDoc.filename}...`);
+    try {
+      const res = await fetch("/api/generate/deepen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: activeDoc.filename,
+          currentContent: activeDoc.content,
+          appName: currentProject.name,
+          problem: currentProject.raw_idea,
+          features: currentProject.tech_stack,
+          userId: currentUser.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.deepenedContent) {
+        const updated = [...documents];
+        updated[selectedDocIndex] = { ...activeDoc, content: data.deepenedContent };
+        setDocuments(updated);
+        setEditedDocContent(data.deepenedContent);
+
+        if (activeDoc.id) {
+          await fetch(`/api/projects/${currentProject.id}/documents`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              docId: activeDoc.id,
+              filename: activeDoc.filename,
+              content: data.deepenedContent,
+            }),
+          });
+        }
+        showNotice(`✓ Dokumen ${activeDoc.filename} berhasil diperdalam dengan AI (${data.usedModel || "Gemini"})!`);
+      } else {
+        showNotice(`Gagal memperdalam dokumen: ${data.error || "Terjadi kesalahan"}`);
+      }
+    } catch (err: unknown) {
+      showNotice(`Error: ${(err as Error).message}`);
+    } finally {
+      setIsDeepeningDoc(false);
+    }
+  };
+
+  // Import Files Handler (ZIP or Multiple Markdown)
+  const handleFilesSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsProcessingImport(true);
+    try {
+      const extracted: { filename: string; content: string; size: number }[] = [];
+      let detectedName = "";
+      let detectedIdea = "";
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+
+        if (file.name.toLowerCase().endsWith(".zip") || file.type.includes("zip")) {
+          const zip = await JSZip.loadAsync(file);
+          const zipEntries = Object.keys(zip.files);
+          for (const path of zipEntries) {
+            const entry = zip.files[path];
+            if (!entry.dir && (path.endsWith(".md") || path.endsWith(".txt") || path.endsWith(".markdown"))) {
+              const text = await entry.async("string");
+              const baseName = path.split("/").pop() || path;
+              extracted.push({ filename: baseName, content: text, size: text.length });
+
+              if (baseName.toLowerCase().includes("prd") && !detectedName) {
+                const match = text.match(/#\s*(?:Product Requirements Document(?:\s*\(PRD\))?|PRD)?[:\s\-]+([^\n\r]+)/i);
+                if (match && match[1]) detectedName = match[1].trim();
+              }
+            }
+          }
+          if (!detectedName) {
+            detectedName = file.name.replace(/\.zip$/i, "").replace(/[-_]/g, " ");
+          }
+        } else if (file.name.endsWith(".md") || file.name.endsWith(".txt") || file.name.endsWith(".markdown")) {
+          const text = await file.text();
+          extracted.push({ filename: file.name, content: text, size: file.size });
+
+          if (file.name.toLowerCase().includes("prd") && !detectedName) {
+            const match = text.match(/#\s*(?:Product Requirements Document(?:\s*\(PRD\))?|PRD)?[:\s\-]+([^\n\r]+)/i);
+            if (match && match[1]) detectedName = match[1].trim();
+          }
+        }
+      }
+
+      setImportDocs(extracted);
+      if (detectedName) setImportProjectName(detectedName);
+      else if (!importProjectName && extracted.length > 0) setImportProjectName("Proyek Impor Eksternal");
+
+      if (extracted.length > 0) {
+        showNotice(`✓ Berhasil membaca ${extracted.length} berkas dokumen perencanaan.`);
+      }
+    } catch (err: unknown) {
+      console.error("Failed to parse uploaded files:", err);
+      showNotice("Gagal membaca file yang diunggah. Pastikan format .zip atau berkas .md valid.");
+    } finally {
+      setIsProcessingImport(false);
+    }
+  };
+
+  // Save Imported Project to Neon Database
+  const handleSaveImportedProject = async () => {
+    if (!importProjectName.trim()) {
+      showNotice("Nama proyek wajib diisi.");
+      return;
+    }
+    if (importDocs.length === 0) {
+      showNotice("Belum ada dokumen yang diunggah.");
+      return;
+    }
+
+    setIsSavingImport(true);
+    try {
+      const res = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: importProjectName.trim(),
+          raw_idea: importProjectIdea.trim() || `Proyek hasil impor ${importDocs.length} dokumen perencanaan eksternal.`,
+          tech_stack: ["Next.js 15", "Neon PostgreSQL", "TailwindCSS"],
+          documents: importDocs.map((d) => ({
+            filename: d.filename,
+            content: d.content,
+          })),
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.project) {
+        setShowImportModal(false);
+        setImportDocs([]);
+        setImportProjectName("");
+        setImportProjectIdea("");
+        await fetchProjects();
+        await handleOpenProject(data.project);
+        showNotice(`✓ Proyek "${data.project.name}" (${importDocs.length} dokumen) berhasil diimpor ke Workspace!`);
+      } else {
+        showNotice(`Gagal menyimpan proyek: ${data.error || "Terjadi kesalahan"}`);
+      }
+    } catch (err: unknown) {
+      showNotice(`Error: ${(err as Error).message}`);
+    } finally {
+      setIsSavingImport(false);
+    }
   };
 
   // Parse tasks.md into TaskExecutionItem[]
@@ -576,12 +759,21 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
       return;
     }
 
+    const finalFeatures = featuresText.trim()
+      ? featuresText.split("\n").map((s) => s.trim()).filter(Boolean)
+      : meta.coreFeatures;
+
+    const payloadMeta = {
+      ...meta,
+      coreFeatures: finalFeatures,
+    };
+
     setIsGenerating(true);
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...meta, saveToDatabase: true, userId: currentUser.id }),
+        body: JSON.stringify({ ...payloadMeta, saveToDatabase: true, userId: currentUser.id }),
       });
       const data = await res.json();
       if (data.success && data.documents) {
@@ -601,7 +793,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
         setActiveTab("workspace");
         setSelectedDocIndex(0);
         fetchProjects();
-        showNotice("11 Dokumen Blueprint berhasil disusun dan disimpan di Neon Postgres!");
+        showNotice(`✓ 12 Dokumen Blueprint untuk "${meta.appName}" berhasil disusun dan disimpan di Neon Postgres!`);
       } else {
         showNotice(data.error || "Gagal menyusun dokumen");
       }
@@ -1013,11 +1205,19 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
                 <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
                   <button
-                    onClick={() => setActiveTab("wizard")}
+                    onClick={handleStartNewProject}
                     className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
                   >
                     <Plus className="h-4 w-4" />
                     <span>Mulai Wizard 7-Tahap</span>
+                  </button>
+                  <button
+                    onClick={() => setShowImportModal(true)}
+                    className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm"
+                    title="Unggah berkas .ZIP atau beberapa berkas .md sekaligus"
+                  >
+                    <Upload className="h-4 w-4 text-blue-400" />
+                    <span>Unggah Dokumen (MD / ZIP)</span>
                   </button>
                   <button
                     onClick={() => setActiveTab("keys")}
@@ -1088,6 +1288,14 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                     >
                       <Plus className="h-3.5 w-3.5 text-emerald-400" />
                       <span>Tambah Dokumen</span>
+                    </button>
+                    <button
+                      onClick={() => setShowImportModal(true)}
+                      className="px-3 py-1.5 rounded-md bg-surface-elevated hover:bg-zinc-700 text-zinc-200 border border-border text-xs font-medium flex items-center gap-1.5 transition-all active:scale-95"
+                      title="Unggah berkas perencanaan tambahan (MD atau ZIP)"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-blue-400" />
+                      <span>Impor ZIP / MD</span>
                     </button>
                     <button
                       onClick={handleCopyAiBundle}
@@ -1472,6 +1680,16 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
                           <div className="flex items-center gap-2 flex-wrap">
                             <button
+                              onClick={handleDeepenActiveDoc}
+                              disabled={isDeepeningDoc}
+                              className="px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                              title="Perdalam dan kembangkan spesifikasi dokumen ini dengan AI Gemini"
+                            >
+                              <Sparkles className={`h-3 w-3 text-emerald-400 ${isDeepeningDoc ? "animate-spin" : ""}`} />
+                              <span>{isDeepeningDoc ? "Memperdalam..." : "Perdalam dengan AI"}</span>
+                            </button>
+
+                            <button
                               onClick={() => {
                                 if (!isEditingDoc) {
                                   setEditedDocContent(activeDoc.content);
@@ -1539,13 +1757,21 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => setActiveTab("wizard")}
-                  className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                  onClick={handleStartNewProject}
+                  className="px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Buat Proyek Baru</span>
+                </button>
+                <button
+                  onClick={() => setShowImportModal(true)}
+                  className="px-3 py-1.5 rounded-md bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                  title="Unggah berkas .ZIP atau beberapa berkas .md sekaligus"
+                >
+                  <Upload className="h-3.5 w-3.5 text-blue-400" />
+                  <span>Unggah Dokumen (MD / ZIP)</span>
                 </button>
                 <button
                   disabled={projectsLoading}
@@ -1593,7 +1819,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                   Gunakan Wizard 7-Tahap untuk menghasilkan 11 dokumen blueprint terpadu.
                 </p>
                 <button
-                  onClick={() => setActiveTab("wizard")}
+                  onClick={handleStartNewProject}
                   className="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold inline-flex items-center gap-1.5"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -1849,20 +2075,32 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
               {wizardStep === 3 && (
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-white">Tahap 3: Fitur Utama (Core Features)</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-white">Tahap 3: Fitur Utama (Core Features)</h3>
+                    <span className="text-[11px] text-zinc-500 font-mono">1 fitur per baris</span>
+                  </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-zinc-300">Daftar Fitur (Pisahkan per baris)</label>
+                    <label className="text-xs text-zinc-300">Daftar Fitur (Pisahkan dengan menekan Enter)</label>
                     <textarea
-                      rows={4}
-                      value={meta.coreFeatures.join("\n")}
-                      onChange={(e) =>
-                        setMeta({
-                          ...meta,
-                          coreFeatures: e.target.value.split("\n").filter((s) => s.trim().length > 0),
-                        })
-                      }
-                      className="w-full px-3 py-2 rounded-md bg-surface-muted border border-border text-white text-xs font-mono focus:outline-none focus:border-emerald-500"
+                      rows={6}
+                      placeholder={"Contoh:\nManajemen Menu & Varian Harga\nSistem Kasir POS & Cetak Struk Bluetooth\nPencatatan Stok Bahan Baku Harian\nLaporan Penjualan & Laba Bersih\nShift Kasir & Rekonsiliasi Kas"}
+                      value={featuresText}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setFeaturesText(val);
+                        setMeta((prev) => ({
+                          ...prev,
+                          coreFeatures: val.split("\n").map((s) => s.trim()).filter(Boolean),
+                        }));
+                      }}
+                      className="w-full px-3 py-2.5 rounded-lg bg-surface-muted border border-border text-white text-xs font-mono focus:outline-none focus:border-emerald-500 leading-relaxed"
                     />
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                      <span>Tekan <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-border text-zinc-300 font-mono text-[10px]">Enter</kbd> untuk membuat baris baru.</span>
+                      <span className="font-mono text-emerald-400 font-semibold">
+                        {featuresText.split("\n").map((s) => s.trim()).filter(Boolean).length} fitur terdaftar
+                      </span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2431,6 +2669,152 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                 className="px-4 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold"
               >
                 Simpan Dokumen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Import Planning Documents (MD or ZIP) */}
+      {showImportModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="max-w-xl w-full bg-surface border border-border rounded-2xl p-5 sm:p-6 space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border/80 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                  <Upload className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-white">Unggah Dokumen Perencanaan (MD / ZIP)</h3>
+                  <p className="text-xs text-zinc-400">Impor blueprint hasil Claude, ChatGPT, Gemini, atau tim internal</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportDocs([]);
+                }}
+                className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Drag & Drop or Browse Zone */}
+            <div className="p-6 border-2 border-dashed border-border/80 hover:border-emerald-500/50 rounded-xl bg-surface-muted/40 text-center space-y-3 transition-colors relative">
+              <input
+                type="file"
+                multiple
+                accept=".md,.markdown,.txt,.zip,application/zip,application/x-zip-compressed"
+                onChange={handleFilesSelected}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
+              <div className="h-12 w-12 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                <FileArchive className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <div className="text-xs sm:text-sm font-semibold text-white">
+                  Klik untuk Memilih File atau Drag & Drop ke Sini
+                </div>
+                <p className="text-[11px] text-zinc-400 max-w-sm mx-auto">
+                  Unggah <strong>1 file .ZIP</strong> (berisi dokumen markdown) ATAU <strong>pilih beberapa file .md sekaligus</strong>.
+                </p>
+              </div>
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-800 text-zinc-300 text-[10px] font-mono border border-border">
+                <span>Format yang didukung: .zip, .md, .markdown, .txt</span>
+              </div>
+            </div>
+
+            {isProcessingImport && (
+              <div className="p-3 rounded-lg bg-surface-muted text-xs text-zinc-300 flex items-center justify-center gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin text-emerald-400" />
+                <span>Membaca dan mengekstrak berkas dokumen...</span>
+              </div>
+            )}
+
+            {/* Extracted Files Preview */}
+            {importDocs.length > 0 && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-white flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <span>{importDocs.length} Dokumen Berhasil Diekstrak</span>
+                  </span>
+                  <span className="text-[11px] font-mono text-zinc-400">
+                    Total: {Math.round(importDocs.reduce((acc, d) => acc + d.size, 0) / 1024)} KB
+                  </span>
+                </div>
+
+                <div className="max-h-40 overflow-y-auto space-y-1 p-2 rounded-lg bg-surface-muted border border-border text-xs font-mono">
+                  {importDocs.map((doc, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-1.5 rounded hover:bg-zinc-800/60">
+                      <div className="flex items-center gap-2 truncate">
+                        <FileText className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                        <span className="text-zinc-200 truncate">{doc.filename}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-400 shrink-0 font-mono ml-2">
+                        {Math.round(doc.size / 1024 * 10) / 10} KB
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Project Name and Details Input */}
+                <div className="space-y-3 pt-2">
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-300 font-medium">Nama Proyek</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: POS Warung Dimsum"
+                      value={importProjectName}
+                      onChange={(e) => setImportProjectName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-surface-muted border border-border text-white text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs text-zinc-300 font-medium">Deskripsi Singkat / Masalah</label>
+                    <input
+                      type="text"
+                      placeholder="Contoh: Sistem kasir dan manajemen stok bahan baku warung dimsum"
+                      value={importProjectIdea}
+                      onChange={(e) => setImportProjectIdea(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg bg-surface-muted border border-border text-white text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportDocs([]);
+                }}
+                className="px-3.5 py-2 rounded-xl text-xs text-zinc-400 hover:bg-zinc-800 transition-all"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isSavingImport || importDocs.length === 0 || !importProjectName.trim()}
+                onClick={handleSaveImportedProject}
+                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center gap-2 transition-all shadow-sm active:scale-95"
+              >
+                {isSavingImport ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                    <span>Menyimpan ke Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Simpan & Buka di Workspace</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

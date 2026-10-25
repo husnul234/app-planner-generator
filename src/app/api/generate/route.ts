@@ -53,14 +53,21 @@ export async function POST(req: Request) {
     // 2. If Gemini keys exist in pool, perform AI synthesis for PRD executive summary
     let customAiSummary = "";
     if (geminiKeys.length > 0) {
-      const prompt = `Bertindaklah sebagai Senior Software Architect. Berikan ringkasan arsitektur teknis dan analisis scope mendalam dalam format Markdown untuk aplikasi berikut:
-Nama Aplikasi: ${meta.appName}
-Kategori: ${meta.category}
-Masalah: ${meta.problem}
-Fitur Inti: ${meta.coreFeatures.join(", ")}
-Tech Stack: ${meta.techStack.join(", ")}
+      const prompt = `Bertindaklah sebagai Principal Software Architect & Lead Engineer.
+Lakukan analisis arsitektur mendalam dan komprehensif untuk aplikasi "${meta.appName}":
+- Kategori: ${meta.category}
+- Masalah: ${meta.problem}
+- Target Pengguna: ${meta.targetAudience}
+- Fitur Inti: ${meta.coreFeatures.join(", ")}
+- Tech Stack: ${meta.techStack.join(", ")}
+- Basis Data: ${meta.dbType}
 
-Berikan output langsung dalam format Markdown dengan judul '## Analisis Arsitektur & Rekomendasi Solusi'.`;
+Tuliskan analisis teknis mendalam (minimal 400-600 kata) dalam format Markdown dengan struktur:
+## 6. Analisis Arsitektur Lanjutan & Rekomendasi Solusi AI
+### 6.1 Analisis Risiko Teknis & Mitigasi (Bottleneck & Concurrency)
+### 6.2 Strategi Optimasi Basis Data & Caching (Query Pooling & Indexing)
+### 6.3 Rekomendasi Alur Bisnis Kritis & Integritas Transaksi
+`;
 
       const aiGen = await executeGeminiWithKeyPool({
         prompt,
