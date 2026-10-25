@@ -23,6 +23,7 @@ import {
   Plus,
   Edit3,
   X,
+  Menu,
   Sparkles,
   ExternalLink,
 } from "lucide-react";
@@ -36,6 +37,7 @@ interface AdminDashboardProps {
 
 export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserView }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<"overview" | "team" | "projects" | "keys" | "telemetry">("overview");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Telemetry
   const [health, setHealth] = useState<HealthData | null>(null);
@@ -361,27 +363,28 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 h-16 border-b border-border/80 bg-surface/90 backdrop-blur-md px-4 lg:px-8">
-        <div className="max-w-7xl mx-auto h-full flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+      <header className="sticky top-0 z-50 h-16 border-b border-border/80 bg-surface/90 backdrop-blur-md px-3 sm:px-6 lg:px-8 w-full">
+        <div className="max-w-7xl mx-auto h-full flex items-center justify-between gap-2">
+          {/* Brand Logo */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="h-8 w-8 rounded-md bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
               <Shield className="h-4 w-4" />
             </div>
-            <div>
-              <span className="font-semibold tracking-tight text-white text-base">AppPlanner AI</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 ml-2">
+            <div className="flex items-center">
+              <span className="font-semibold tracking-tight text-white text-sm sm:text-base whitespace-nowrap">AppPlanner AI</span>
+              <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 ml-2">
                 ADMIN CONSOLE
               </span>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="flex items-center gap-1 sm:gap-1.5">
+          {/* Desktop Navigation Tabs */}
+          <nav className="hidden lg:flex items-center gap-1 sm:gap-1.5">
             <button
               onClick={() => setActiveTab("overview")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 activeTab === "overview"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -391,7 +394,7 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
               onClick={() => setActiveTab("team")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "team"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -402,7 +405,7 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
               onClick={() => setActiveTab("projects")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "projects"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -413,7 +416,7 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
               onClick={() => setActiveTab("keys")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "keys"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -424,7 +427,7 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
               onClick={() => setActiveTab("telemetry")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "telemetry"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -433,8 +436,8 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
             </button>
           </nav>
 
-          {/* User Profile & Actions */}
-          <div className="flex items-center gap-2">
+          {/* Desktop User Profile & Actions */}
+          <div className="hidden lg:flex items-center gap-2">
             {onSwitchToUserView && (
               <button
                 onClick={onSwitchToUserView}
@@ -446,9 +449,9 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
               </button>
             )}
 
-            <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-muted border border-border text-xs font-mono text-zinc-300">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-muted border border-border text-xs font-mono text-zinc-300">
               <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-              <span>{currentUser.email}</span>
+              <span className="max-w-[140px] truncate">{currentUser.email}</span>
             </div>
 
             <button
@@ -459,8 +462,173 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
               <LogOut className="h-4 w-4" />
             </button>
           </div>
+
+          {/* Mobile Hamburger Toggle Button */}
+          <div className="flex lg:hidden items-center gap-2">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-lg bg-surface-elevated hover:bg-zinc-800 text-zinc-200 border border-border transition-all active:scale-95 flex items-center justify-center shrink-0"
+              aria-label="Toggle Menu Mobile"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5 text-amber-400" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="lg:hidden fixed inset-0 top-16 bg-black/60 backdrop-blur-sm z-30 animate-in fade-in duration-150"
+        />
+      )}
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-x-0 top-16 z-40 bg-surface/98 backdrop-blur-xl border-b border-border shadow-2xl p-4 space-y-3 animate-in slide-in-from-top-2 duration-150 max-h-[calc(100dvh-4rem)] overflow-y-auto">
+          {/* Admin Profile Mini Bar */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-surface-muted border border-border/80">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-amber-400 shrink-0"></div>
+              <div className="min-w-0">
+                <div className="text-xs font-mono font-medium text-white truncate">{currentUser.email}</div>
+                <div className="text-[11px] text-amber-400 font-mono mt-0.5">
+                  Super Admin Console
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 shrink-0">
+              Admin
+            </span>
+          </div>
+
+          {/* Switch to User view if available */}
+          {onSwitchToUserView && (
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onSwitchToUserView();
+              }}
+              className="w-full p-2.5 rounded-xl bg-surface-elevated hover:bg-zinc-700 text-zinc-200 border border-border text-xs font-medium flex items-center justify-center gap-2 transition-all"
+            >
+              <ExternalLink className="h-3.5 w-3.5 text-zinc-400" />
+              <span>Buka Tampilan User Workspace</span>
+            </button>
+          )}
+
+          {/* Admin Navigation items */}
+          <div className="grid grid-cols-1 gap-1.5">
+            <button
+              onClick={() => {
+                setActiveTab("overview");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "overview"
+                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Shield className="h-4 w-4 text-amber-400" />
+                <span>Ringkasan Sistem</span>
+              </div>
+              {activeTab === "overview" && <CheckCircle2 className="h-4 w-4 text-amber-400" />}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("team");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "team"
+                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Users className="h-4 w-4 text-blue-400" />
+                <span>Tim & Role (RBAC)</span>
+              </div>
+              {activeTab === "team" && <CheckCircle2 className="h-4 w-4 text-amber-400" />}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("projects");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "projects"
+                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FolderOpen className="h-4 w-4 text-emerald-400" />
+                <span>Audit Proyek Global</span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-border">
+                {projects.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("keys");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "keys"
+                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Key className="h-4 w-4 text-amber-400" />
+                <span>Kolam BYOK Global</span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-border">
+                {apiKeys.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("telemetry");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "telemetry"
+                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Radio className="h-4 w-4 text-purple-400" />
+                <span>Neon Telemetri</span>
+              </div>
+              {activeTab === "telemetry" && <CheckCircle2 className="h-4 w-4 text-amber-400" />}
+            </button>
+          </div>
+
+          {/* Logout in Mobile Drawer */}
+          <div className="pt-2 border-t border-border/70">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+              className="w-full p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Keluar dari Akun</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Global Notification */}
       {notice && (
@@ -471,7 +639,7 @@ export default function AdminDashboard({ currentUser, onLogout, onSwitchToUserVi
       )}
 
       {/* Main Admin Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-6 overflow-x-hidden">
         {/* ========================================================================= */}
         {/* TAB 1: OVERVIEW */}
         {/* ========================================================================= */}

@@ -16,6 +16,7 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
+  Menu,
   Save,
   Edit3,
   Copy,
@@ -45,6 +46,7 @@ interface UserDashboardProps {
 export default function UserDashboard({ currentUser, onLogout }: UserDashboardProps) {
   const [activeTab, setActiveTab] = useState<"workspace" | "projects" | "wizard" | "keys" | "cost">("workspace");
   const [workspaceView, setWorkspaceView] = useState<"docs" | "tasks" | "cost">("docs");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Speech-to-Text State (NgodingPakeAI Voice Input)
   const [isListening, setIsListening] = useState(false);
@@ -729,27 +731,28 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-50 h-16 border-b border-border/80 bg-surface/90 backdrop-blur-md px-4 lg:px-8">
-        <div className="max-w-7xl mx-auto h-full flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-md bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+      <header className="sticky top-0 z-50 h-16 border-b border-border/80 bg-surface/90 backdrop-blur-md px-3 sm:px-6 lg:px-8 w-full">
+        <div className="max-w-7xl mx-auto h-full flex items-center justify-between gap-2">
+          {/* Brand Logo */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="h-8 w-8 rounded-md bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shrink-0">
               <Layers className="h-4 w-4" />
             </div>
-            <div>
-              <span className="font-semibold tracking-tight text-white text-base">AppPlanner AI</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 ml-2">
+            <div className="flex items-center">
+              <span className="font-semibold tracking-tight text-white text-sm sm:text-base whitespace-nowrap">AppPlanner AI</span>
+              <span className="hidden sm:inline-block text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 ml-2">
                 WORKSPACE
               </span>
             </div>
           </div>
 
-          {/* Navigation Tabs */}
-          <nav className="flex items-center gap-1 sm:gap-1.5">
+          {/* Desktop Navigation Tabs */}
+          <nav className="hidden lg:flex items-center gap-1 sm:gap-1.5">
             <button
               onClick={() => setActiveTab("workspace")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all ${
                 activeTab === "workspace"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -759,7 +762,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
               onClick={() => setActiveTab("projects")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "projects"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -770,7 +773,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
               onClick={() => setActiveTab("wizard")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "wizard"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -784,7 +787,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
               }}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "cost"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -795,7 +798,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
               onClick={() => setActiveTab("keys")}
               className={`px-3 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 ${
                 activeTab === "keys"
-                  ? "bg-zinc-800 text-white border border-zinc-700"
+                  ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
@@ -804,13 +807,13 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
             </button>
           </nav>
 
-          {/* User Profile & Actions */}
-          <div className="flex items-center gap-2">
-            <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-muted border border-border text-xs font-mono text-zinc-300">
+          {/* Desktop User Profile & Actions */}
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-muted border border-border text-xs font-mono text-zinc-300">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              <span>{currentUser.email}</span>
+              <span className="max-w-[140px] truncate">{currentUser.email}</span>
               <span className="text-zinc-500">•</span>
-              <span className="text-emerald-400">{currentUser.credits_remaining} token</span>
+              <span className="text-emerald-400 whitespace-nowrap">{currentUser.credits_remaining} token</span>
             </div>
 
             <button
@@ -821,8 +824,164 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
               <LogOut className="h-4 w-4" />
             </button>
           </div>
+
+          {/* Mobile Hamburger Toggle Button */}
+          <div className="flex lg:hidden items-center gap-2">
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-2 rounded-lg bg-surface-elevated hover:bg-zinc-800 text-zinc-200 border border-border transition-all active:scale-95 flex items-center justify-center shrink-0"
+              aria-label="Toggle Menu Mobile"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5 text-emerald-400" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Mobile Backdrop Overlay */}
+      {mobileMenuOpen && (
+        <div
+          onClick={() => setMobileMenuOpen(false)}
+          className="lg:hidden fixed inset-0 top-16 bg-black/60 backdrop-blur-sm z-30 animate-in fade-in duration-150"
+        />
+      )}
+
+      {/* Mobile Navigation Drawer */}
+      {mobileMenuOpen && (
+        <div className="lg:hidden fixed inset-x-0 top-16 z-40 bg-surface/98 backdrop-blur-xl border-b border-border shadow-2xl p-4 space-y-3 animate-in slide-in-from-top-2 duration-150 max-h-[calc(100dvh-4rem)] overflow-y-auto">
+          {/* User Profile Mini Bar */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-surface-muted border border-border/80">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-400 shrink-0"></div>
+              <div className="min-w-0">
+                <div className="text-xs font-mono font-medium text-white truncate">{currentUser.email}</div>
+                <div className="text-[11px] text-emerald-400 font-mono mt-0.5">
+                  {currentUser.credits_remaining} token tersedia
+                </div>
+              </div>
+            </div>
+            <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 shrink-0">
+              {currentUser.role}
+            </span>
+          </div>
+
+          {/* Navigation items */}
+          <div className="grid grid-cols-1 gap-1.5">
+            <button
+              onClick={() => {
+                setActiveTab("workspace");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "workspace"
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Layers className="h-4 w-4 text-emerald-400" />
+                <span>Workspace</span>
+              </div>
+              {activeTab === "workspace" && <CheckCircle2 className="h-4 w-4 text-emerald-400" />}
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("projects");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "projects"
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <FolderOpen className="h-4 w-4 text-emerald-400" />
+                <span>Proyek Saya</span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-border">
+                {projects.length}
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("wizard");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "wizard"
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+                <span>Wizard 7-Tahap</span>
+              </div>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300">
+                Generator
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("cost");
+                setWorkspaceView("cost");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "cost"
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Calculator className="h-4 w-4 text-blue-400" />
+                <span>Kalkulator Biaya (RAB)</span>
+              </div>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                Estimator
+              </span>
+            </button>
+
+            <button
+              onClick={() => {
+                setActiveTab("keys");
+                setMobileMenuOpen(false);
+              }}
+              className={`w-full p-3 rounded-xl text-xs font-medium flex items-center justify-between transition-all ${
+                activeTab === "keys"
+                  ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 font-semibold"
+                  : "bg-surface-elevated/60 text-zinc-300 hover:bg-surface-elevated border border-border/60"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <Key className="h-4 w-4 text-amber-400" />
+                <span>Kunci BYOK Gemini</span>
+              </div>
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                Rotasi AI
+              </span>
+            </button>
+          </div>
+
+          {/* Logout in Mobile Drawer */}
+          <div className="pt-2 border-t border-border/70">
+            <button
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+              className="w-full p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-medium flex items-center justify-center gap-2 transition-all active:scale-95"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Keluar dari Akun</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Global Notification */}
       {notice && (
@@ -833,7 +992,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 space-y-6 overflow-x-hidden">
         {/* ========================================================================= */}
         {/* TAB 1: WORKSPACE & INLINE EDITOR */}
         {/* ========================================================================= */}
@@ -841,12 +1000,12 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
           <div className="space-y-6">
             {!currentProject || documents.length === 0 ? (
               // ZERO DUMMY DATA EMPTY STATE
-              <div className="p-12 sm:p-16 rounded-2xl bg-surface border border-border text-center space-y-5 shadow-sm max-w-2xl mx-auto my-8">
+              <div className="p-5 sm:p-10 lg:p-16 rounded-2xl bg-surface border border-border text-center space-y-5 shadow-sm max-w-2xl w-full mx-auto my-4 sm:my-8">
                 <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mx-auto">
                   <Sparkles className="h-7 w-7" />
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-2xl font-bold tracking-tight text-white">Belum Ada Proyek Blueprint</h2>
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Belum Ada Proyek Blueprint</h2>
                   <p className="text-xs sm:text-sm text-zinc-400 max-w-md mx-auto leading-relaxed">
                     Ubah ide mentah Anda menjadi 11 dokumen spesifikasi teknis terpadu (PRD, Arsitektur, Skema PostgreSQL, Wireframes, dan API Spec) dalam hitungan detik.
                   </p>
@@ -964,10 +1123,10 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
                 {/* Workspace View Mode Selector (Dokumen vs AI Task Runner) */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/70 pb-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 overflow-x-auto max-w-full pb-1 sm:pb-0 scrollbar-none">
                     <button
                       onClick={() => setWorkspaceView("docs")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 ${
                         workspaceView === "docs"
                           ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                           : "text-zinc-400 hover:text-zinc-200"
@@ -978,7 +1137,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                     </button>
                     <button
                       onClick={() => setWorkspaceView("tasks")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 ${
                         workspaceView === "tasks"
                           ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                           : "text-zinc-400 hover:text-zinc-200"
@@ -992,7 +1151,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                     </button>
                     <button
                       onClick={() => setWorkspaceView("cost")}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 ${
                         workspaceView === "cost"
                           ? "bg-zinc-800 text-white border border-zinc-700 shadow-sm"
                           : "text-zinc-400 hover:text-zinc-200"
@@ -1006,15 +1165,15 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                     </button>
                   </div>
 
-                  <div className="text-[11px] text-zinc-400 flex items-center gap-2">
-                    <Terminal className="h-3.5 w-3.5 text-zinc-500" />
+                  <div className="text-[11px] text-zinc-400 flex items-center gap-2 flex-wrap">
+                    <Terminal className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
                     <span>Eksekusi Terminal:</span>
                     <code
                       onClick={() => {
                         navigator.clipboard.writeText("node scripts/cli.js next");
                         showNotice("Perintah CLI 'node scripts/cli.js next' disalin ke clipboard!");
                       }}
-                      className="px-2 py-0.5 rounded bg-surface-muted text-emerald-400 font-mono cursor-pointer hover:bg-zinc-800 border border-border"
+                      className="px-2 py-0.5 rounded bg-surface-muted text-emerald-400 font-mono cursor-pointer hover:bg-zinc-800 border border-border shrink-0"
                       title="Klik untuk salin perintah"
                     >
                       node scripts/cli.js next
@@ -1303,15 +1462,15 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                   <div className="lg:col-span-8 flex flex-col rounded-xl bg-surface border border-border overflow-hidden">
                     {activeDoc && (
                       <>
-                        <div className="flex items-center justify-between border-b border-border px-4 py-3 bg-surface-muted/50">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-emerald-400" />
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface-muted/50">
+                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                            <FileText className="h-4 w-4 text-emerald-400 shrink-0" />
                             <span className="font-mono text-xs font-semibold text-white">{activeDoc.filename}</span>
                             <span className="text-zinc-500 text-xs">•</span>
-                            <span className="text-xs text-zinc-400">{activeDoc.title || activeDoc.filename}</span>
+                            <span className="text-xs text-zinc-400 truncate max-w-[200px]">{activeDoc.title || activeDoc.filename}</span>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <button
                               onClick={() => {
                                 if (!isEditingDoc) {
@@ -1334,7 +1493,7 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                                 Batal
                               </button>
                             )}
-                            <span className="text-[11px] font-mono text-zinc-500 ml-2">
+                            <span className="text-[11px] font-mono text-zinc-500 ml-1">
                               {activeDoc.content.split(/\s+/).filter(Boolean).length} kata
                             </span>
                           </div>

@@ -67,10 +67,10 @@ export default function HomePage() {
     return (
       <div>
         {/* Floating Simulation Bar */}
-        <div className="bg-amber-950/90 border-b border-amber-500/40 text-amber-300 text-xs py-2 px-4 flex items-center justify-between sticky top-0 z-50 backdrop-blur-md">
+        <div className="bg-amber-950/90 border-b border-amber-500/40 text-amber-300 text-xs py-2 px-3 sm:px-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sticky top-0 z-50 backdrop-blur-md">
           <div className="flex items-center gap-2">
             <Shield className="h-4 w-4 text-amber-400 shrink-0" />
-            <span>Mode Simulasi: Anda sedang melihat tampilan antarmuka sebagai Pengguna (User).</span>
+            <span className="leading-tight">Mode Simulasi: Anda sedang melihat tampilan antarmuka Pengguna (User).</span>
           </div>
           <button
             onClick={() => setSimulatedRole(null)}
