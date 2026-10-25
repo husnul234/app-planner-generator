@@ -36,6 +36,12 @@ import {
   Upload,
   FileUp,
   FileArchive,
+  MessageSquareCode,
+  Bot,
+  Send,
+  RotateCcw,
+  Check,
+  Zap,
 } from "lucide-react";
 import { ProfileItem, ProjectItem, DocItem, ApiKeyItem, ProjectMeta, TaskExecutionItem } from "../../types";
 import { ARCHITECTURE_PRESETS, ArchitecturePreset } from "../../lib/generator/templates";
@@ -108,6 +114,22 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
 
   // Deepen Document with AI State
   const [isDeepeningDoc, setIsDeepeningDoc] = useState(false);
+
+  // IDE Chat Co-Pilot State (Edit & Revise via Chat)
+  const [showChatEdit, setShowChatEdit] = useState(false);
+  const [chatMessages, setChatMessages] = useState<Array<{
+    id: string;
+    role: "user" | "assistant";
+    text: string;
+    explanation?: string;
+    revisedContent?: string;
+    targetFilename?: string;
+    applied?: boolean;
+    timestamp: string;
+  }>>([]);
+  const [chatInputText, setChatInputText] = useState("");
+  const [isChatSubmitting, setIsChatSubmitting] = useState(false);
+  const [docVersionHistory, setDocVersionHistory] = useState<Record<string, string[]>>({});
 
   // Personal BYOK Keys State
   const [apiKeys, setApiKeys] = useState<ApiKeyItem[]>([]);
@@ -459,6 +481,227 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
     } finally {
       setIsDeepeningDoc(false);
     }
+  };
+
+  // Quick suggestions based on document type for IDE Chat Co-Pilot
+  const getDocQuickPrompts = (filename: string): string[] => {
+    const fn = (filename || "").toLowerCase();
+    if (fn.includes("schema") || fn.includes("database")) {
+      return [
+        "Tambahkan tabel voucher_diskon dan relasikan ke order",
+        "Ubah primary key ke UUIDv4 dan tambahkan soft-delete",
+        "Tambahkan kolom payment_method enum (qris, cash, transfer)",
+        "Tambahkan index performa untuk pencarian produk & tanggal",
+      ];
+    }
+    if (fn.includes("prd")) {
+      return [
+        "Tambahkan alur pembayaran multi-metode (QRIS + Cash)",
+        "Perjelas persona kasir, manajer, dan owner warung",
+        "Tambahkan metrik keberhasilan bisnis & KPI performa",
+        "Tambahkan skenario penanganan offline mode kasir",
+      ];
+    }
+    if (fn.includes("api")) {
+      return [
+        "Tambahkan endpoint rekap kas harian per shift kasir",
+        "Tambahkan endpoint cetak ulang struk pembayaran",
+        "Format seluruh respons error menggunakan RFC 7807",
+        "Tambahkan autentikasi bearer token di semua rute privat",
+      ];
+    }
+    if (fn.includes("wireframe")) {
+      return [
+        "Tambahkan layout ASCII modal checkout dan pilih metode bayar",
+        "Tambahkan tata letak mobile drawer responsif 390px",
+        "Tambahkan preview struk belanja thermal printer 58mm",
+      ];
+    }
+    if (fn.includes("task")) {
+      return [
+        "Pecah tahapan menjadi sprint 1 minggu siap coding",
+        "Tambahkan prompt instruksi AI coding untuk tiap task",
+        "Tambahkan kriteria pengujian unit test dan e2e",
+      ];
+    }
+    return [
+      "Perdalam penjelasan teknis dokumen ini agar lebih komprehensif",
+      "Sederhanakan bagian yang terlalu panjang tanpa mengurangi detail",
+      "Sesuaikan dengan standar Next.js 15 dan Neon PostgreSQL",
+    ];
+  };
+
+  // Send message to Chat Edit Co-Pilot
+  const handleSendChatEdit = async (customText?: string) => {
+    const messageToSend = (customText || chatInputText).trim();
+    if (!messageToSend || isChatSubmitting) return;
+
+    const activeDoc = documents[selectedDocIndex];
+    if (!activeDoc || !currentProject) {
+      showNotice("Silakan pilih dokumen terlebih dahulu di Workspace.");
+      return;
+    }
+
+    const userMsgId = `msg-${Date.now()}`;
+    const userMsg = {
+      id: userMsgId,
+      role: "user" as const,
+      text: messageToSend,
+      targetFilename: activeDoc.filename,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    const newHistory = [...chatMessages, userMsg];
+    setChatMessages(newHistory);
+    setChatInputText("");
+    setIsChatSubmitting(true);
+
+    try {
+      const res = await fetch("/api/generate/chat-edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: activeDoc.filename,
+          currentContent: activeDoc.content,
+          userMessage: messageToSend,
+          chatHistory: chatMessages.slice(-6).map((m) => ({ role: m.role, content: m.text })),
+          appName: currentProject.name,
+          problem: currentProject.raw_idea,
+          features: currentProject.tech_stack,
+          userId: currentUser.id,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success && data.revisedContent) {
+        const assistantMsgId = `msg-${Date.now() + 1}`;
+        const assistantMsg = {
+          id: assistantMsgId,
+          role: "assistant" as const,
+          text: data.explanation || "Revisi dokumen siap ditinjau dan diterapkan.",
+          explanation: data.explanation,
+          revisedContent: data.revisedContent,
+          targetFilename: activeDoc.filename,
+          applied: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        setChatMessages([...newHistory, assistantMsg]);
+        showNotice(`✓ Co-Pilot selesai merancang revisi untuk ${activeDoc.filename}!`);
+      } else {
+        const errorMsg = {
+          id: `msg-${Date.now() + 1}`,
+          role: "assistant" as const,
+          text: `⚠️ Maaf, gagal memproses revisi: ${data.error || "Terjadi kesalahan"}`,
+          targetFilename: activeDoc.filename,
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        };
+        setChatMessages([...newHistory, errorMsg]);
+        showNotice(`Gagal merevisi: ${data.error || "Periksa kunci API"}`);
+      }
+    } catch (err: unknown) {
+      const errorMsg = {
+        id: `msg-${Date.now() + 1}`,
+        role: "assistant" as const,
+        text: `⚠️ Terjadi kesalahan jaringan: ${(err as Error).message}`,
+        targetFilename: activeDoc.filename,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setChatMessages([...newHistory, errorMsg]);
+    } finally {
+      setIsChatSubmitting(false);
+    }
+  };
+
+  // Apply Revised Content to Active Document
+  const handleApplyChatRevision = async (revisedContent: string, targetFilename: string, messageId: string) => {
+    const docIdx = documents.findIndex((d) => d.filename.toLowerCase() === targetFilename.toLowerCase());
+    if (docIdx === -1 || !currentProject) return;
+
+    const targetDoc = documents[docIdx];
+
+    // Save previous version to history for undo
+    setDocVersionHistory((prev) => ({
+      ...prev,
+      [targetFilename]: [...(prev[targetFilename] || []), targetDoc.content],
+    }));
+
+    // Update document in state
+    const updatedDocs = [...documents];
+    updatedDocs[docIdx] = { ...targetDoc, content: revisedContent };
+    setDocuments(updatedDocs);
+    if (selectedDocIndex === docIdx) {
+      setEditedDocContent(revisedContent);
+    }
+
+    // Mark message as applied
+    setChatMessages((prev) =>
+      prev.map((m) => (m.id === messageId ? { ...m, applied: true } : m))
+    );
+
+    // Persist to Neon Postgres & S3
+    if (targetDoc.id) {
+      try {
+        await fetch(`/api/projects/${currentProject.id}/documents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            docId: targetDoc.id,
+            filename: targetDoc.filename,
+            content: revisedContent,
+          }),
+        });
+      } catch (err) {
+        console.error("Save revision to DB error:", err);
+      }
+    }
+
+    showNotice(`✓ Revisi berhasil diterapkan ke ${targetFilename} dan disimpan ke database!`);
+  };
+
+  // Revert Document to Previous Version
+  const handleUndoRevision = async (targetFilename: string) => {
+    const historyList = docVersionHistory[targetFilename] || [];
+    if (historyList.length === 0 || !currentProject) {
+      showNotice("Tidak ada riwayat versi sebelumnya untuk dokumen ini.");
+      return;
+    }
+
+    const previousContent = historyList[historyList.length - 1];
+    const newHistoryList = historyList.slice(0, -1);
+
+    const docIdx = documents.findIndex((d) => d.filename.toLowerCase() === targetFilename.toLowerCase());
+    if (docIdx === -1) return;
+
+    const targetDoc = documents[docIdx];
+    const updatedDocs = [...documents];
+    updatedDocs[docIdx] = { ...targetDoc, content: previousContent };
+    setDocuments(updatedDocs);
+    if (selectedDocIndex === docIdx) {
+      setEditedDocContent(previousContent);
+    }
+
+    setDocVersionHistory((prev) => ({
+      ...prev,
+      [targetFilename]: newHistoryList,
+    }));
+
+    if (targetDoc.id) {
+      try {
+        await fetch(`/api/projects/${currentProject.id}/documents`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            docId: targetDoc.id,
+            filename: targetDoc.filename,
+            content: previousContent,
+          }),
+        });
+      } catch (err) {
+        console.error("Revert revision error:", err);
+      }
+    }
+
+    showNotice(`✓ Dokumen ${targetFilename} dikembalikan ke versi sebelumnya.`);
   };
 
   // Import Files Handler (ZIP or Multiple Markdown)
@@ -1617,124 +1860,358 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
                   /* ========================================================================= */
                   /* DOKUMEN BLUEPRINT VIEW (ORIGINAL WORKSPACE GRID)                          */
                   /* ========================================================================= */
-                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                  {/* File List */}
-                  <div className="lg:col-span-4 space-y-2">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 px-1 mb-2 flex items-center justify-between">
-                      <span>Daftar Dokumen ({documents.length})</span>
-                      <span className="font-mono text-[10px] text-zinc-500">Postgres + S3</span>
-                    </div>
-                    <div className="space-y-1.5 max-h-[640px] overflow-y-auto pr-1">
-                      {documents.map((doc, idx) => {
-                        const isSelected = selectedDocIndex === idx;
-                        return (
-                          <button
-                            key={doc.filename}
-                            onClick={() => {
-                              setSelectedDocIndex(idx);
-                              setIsEditingDoc(false);
-                            }}
-                            className={`w-full text-left p-3 rounded-lg transition-all flex items-start justify-between border ${
-                              isSelected
-                                ? "bg-zinc-800/90 border-emerald-500/50 text-white shadow-sm"
-                                : "bg-surface border-border/70 hover:bg-surface-elevated text-zinc-300"
-                            }`}
-                          >
-                            <div className="flex items-start gap-2.5 min-w-0">
-                              <span
-                                className={`text-[10px] font-mono px-1.5 py-0.5 rounded mt-0.5 ${
-                                  isSelected
-                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                                    : "bg-zinc-800 text-zinc-400"
-                                }`}
-                              >
-                                {String(idx + 1).padStart(2, "0")}
-                              </span>
-                              <div className="min-w-0">
-                                <div className="text-xs font-medium font-mono truncate">{doc.filename}</div>
-                                <div className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">
-                                  {doc.title || doc.filename}
+                  <div className={`grid grid-cols-1 ${showChatEdit ? "lg:grid-cols-12" : "lg:grid-cols-12"} gap-6`}>
+                    {/* File List */}
+                    <div className={`${showChatEdit ? "lg:col-span-3" : "lg:col-span-4"} space-y-2 transition-all`}>
+                      <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 px-1 mb-2 flex items-center justify-between">
+                        <span>Daftar Dokumen ({documents.length})</span>
+                        <span className="font-mono text-[10px] text-zinc-500">Postgres + S3</span>
+                      </div>
+                      <div className="space-y-1.5 max-h-[640px] overflow-y-auto pr-1">
+                        {documents.map((doc, idx) => {
+                          const isSelected = selectedDocIndex === idx;
+                          return (
+                            <button
+                              key={doc.filename}
+                              onClick={() => {
+                                setSelectedDocIndex(idx);
+                                setIsEditingDoc(false);
+                              }}
+                              className={`w-full text-left p-3 rounded-lg transition-all flex items-start justify-between border ${
+                                isSelected
+                                  ? "bg-zinc-800/90 border-emerald-500/50 text-white shadow-sm"
+                                  : "bg-surface border-border/70 hover:bg-surface-elevated text-zinc-300"
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5 min-w-0">
+                                <span
+                                  className={`text-[10px] font-mono px-1.5 py-0.5 rounded mt-0.5 ${
+                                    isSelected
+                                      ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                                      : "bg-zinc-800 text-zinc-400"
+                                  }`}
+                                >
+                                  {String(idx + 1).padStart(2, "0")}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-medium font-mono truncate">{doc.filename}</div>
+                                  <div className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">
+                                    {doc.title || doc.filename}
+                                  </div>
                                 </div>
                               </div>
+                              <ChevronRight
+                                className={`h-4 w-4 shrink-0 mt-1 ${isSelected ? "text-emerald-400" : "text-zinc-600"}`}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Viewer / Editor + IDE Chat Co-Pilot Drawer */}
+                    <div className={`${showChatEdit ? "lg:col-span-9" : "lg:col-span-8"} flex flex-col rounded-xl bg-surface border border-border overflow-hidden transition-all`}>
+                      {activeDoc && (
+                        <>
+                          {/* Viewer Toolbar */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface-muted/50">
+                            <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                              <FileText className="h-4 w-4 text-emerald-400 shrink-0" />
+                              <span className="font-mono text-xs font-semibold text-white">{activeDoc.filename}</span>
+                              <span className="text-zinc-500 text-xs">•</span>
+                              <span className="text-xs text-zinc-400 truncate max-w-[180px] sm:max-w-[260px]">{activeDoc.title || activeDoc.filename}</span>
                             </div>
-                            <ChevronRight
-                              className={`h-4 w-4 shrink-0 mt-1 ${isSelected ? "text-emerald-400" : "text-zinc-600"}`}
-                            />
-                          </button>
-                        );
-                      })}
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* IDE Chat Co-Pilot Toggle */}
+                              <button
+                                onClick={() => setShowChatEdit(!showChatEdit)}
+                                className={`px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 border ${
+                                  showChatEdit
+                                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/50 shadow-cyan-950/40"
+                                    : "bg-surface-elevated hover:bg-zinc-700 text-zinc-200 border-border"
+                                }`}
+                                title="Buka Co-Pilot AI untuk merevisi dokumen ini via chat (gaya Cursor / Lovable)"
+                              >
+                                <MessageSquareCode className="h-3.5 w-3.5 text-cyan-400" />
+                                <span>Revisi via Chat</span>
+                                <span className="px-1 py-0.2 rounded text-[9px] bg-cyan-500/20 text-cyan-300 font-mono">
+                                  IDE
+                                </span>
+                              </button>
+
+                              {/* Undo Version Button if available */}
+                              {(docVersionHistory[activeDoc.filename]?.length || 0) > 0 && (
+                                <button
+                                  onClick={() => handleUndoRevision(activeDoc.filename)}
+                                  className="px-2 py-1 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs flex items-center gap-1 transition-all"
+                                  title="Kembalikan dokumen ke versi sebelum revisi terakhir"
+                                >
+                                  <RotateCcw className="h-3 w-3 text-amber-400" />
+                                  <span>Undo ({docVersionHistory[activeDoc.filename].length})</span>
+                                </button>
+                              )}
+
+                              <button
+                                onClick={handleDeepenActiveDoc}
+                                disabled={isDeepeningDoc}
+                                className="px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                                title="Perdalam dan kembangkan spesifikasi dokumen ini dengan AI Gemini"
+                              >
+                                <Sparkles className={`h-3 w-3 text-emerald-400 ${isDeepeningDoc ? "animate-spin" : ""}`} />
+                                <span>{isDeepeningDoc ? "Memperdalam..." : "Perdalam AI"}</span>
+                              </button>
+
+                              <button
+                                onClick={() => {
+                                  if (!isEditingDoc) {
+                                    setEditedDocContent(activeDoc.content);
+                                    setIsEditingDoc(true);
+                                  } else {
+                                    handleSaveDocEdit();
+                                  }
+                                }}
+                                className="px-2.5 py-1 rounded bg-surface-elevated hover:bg-zinc-700 text-zinc-200 border border-border text-xs flex items-center gap-1.5 transition-all"
+                              >
+                                {isEditingDoc ? <Save className="h-3 w-3 text-emerald-400" /> : <Edit3 className="h-3 w-3" />}
+                                <span>{isEditingDoc ? "Simpan" : "Edit MD"}</span>
+                              </button>
+
+                              {isEditingDoc && (
+                                <button
+                                  onClick={() => setIsEditingDoc(false)}
+                                  className="px-2 py-1 rounded hover:bg-zinc-800 text-zinc-400 text-xs"
+                                >
+                                  Batal
+                                </button>
+                              )}
+
+                              <span className="text-[11px] font-mono text-zinc-500 ml-1">
+                                {activeDoc.content.split(/\s+/).filter(Boolean).length} kata
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Split Container: Document Content + Sidecar Chat Co-Pilot */}
+                          <div className={`flex-1 flex ${showChatEdit ? "flex-col xl:flex-row divide-y xl:divide-y-0 xl:divide-x divide-border" : "flex-col"} min-h-[560px]`}>
+                            {/* Left: Document Content */}
+                            <div className={`${showChatEdit ? "xl:w-7/12" : "w-full"} flex flex-col min-w-0 flex-1`}>
+                              {isEditingDoc ? (
+                                <div className="p-4 flex-1 flex flex-col">
+                                  <textarea
+                                    rows={22}
+                                    value={editedDocContent}
+                                    onChange={(e) => setEditedDocContent(e.target.value)}
+                                    className="w-full h-full p-4 rounded-lg bg-surface-muted border border-border text-zinc-200 font-mono text-xs leading-relaxed focus:outline-none focus:border-emerald-500"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="p-4 sm:p-6 overflow-y-auto max-h-[640px] font-mono text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
+                                  {activeDoc.content}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Right: IDE Chat Co-Pilot Sidecar */}
+                            {showChatEdit && (
+                              <div className="xl:w-5/12 bg-zinc-950/80 flex flex-col border-t xl:border-t-0 min-h-[480px] xl:max-h-[680px]">
+                                {/* Chat Header */}
+                                <div className="px-3.5 py-2.5 bg-zinc-900/90 border-b border-border flex items-center justify-between">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <div className="p-1 rounded-md bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
+                                      <Bot className="h-4 w-4" />
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                                        <span>Co-Pilot Revisi AI</span>
+                                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300 font-mono">
+                                          Gemini
+                                        </span>
+                                      </div>
+                                      <div className="text-[10px] text-zinc-400 font-mono truncate">
+                                        Target: <span className="text-emerald-400 font-semibold">{activeDoc.filename}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex items-center gap-1">
+                                    {chatMessages.length > 0 && (
+                                      <button
+                                        onClick={() => setChatMessages([])}
+                                        className="px-1.5 py-0.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 text-[10px] font-mono transition-all"
+                                        title="Bersihkan riwayat percakapan"
+                                      >
+                                        Bersihkan
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => setShowChatEdit(false)}
+                                      className="p-1 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white transition-all"
+                                      title="Tutup panel chat"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                {/* Chat Messages Stream */}
+                                <div className="flex-1 p-3.5 overflow-y-auto space-y-3 font-sans text-xs max-h-[420px] xl:max-h-[460px]">
+                                  {chatMessages.length === 0 ? (
+                                    <div className="p-4 rounded-xl bg-surface-muted/50 border border-border/80 space-y-3">
+                                      <div className="flex items-center gap-2 text-cyan-400 font-semibold text-xs">
+                                        <Sparkles className="h-4 w-4" />
+                                        <span>Co-Pilot Arsitektur Siap Beraksi</span>
+                                      </div>
+                                      <p className="text-zinc-400 text-xs leading-relaxed">
+                                        Instruksikan perubahan untuk berkas <strong className="text-emerald-300 font-mono">{activeDoc.filename}</strong>. Co-Pilot akan merevisi, menambah tabel, endpoint, atau menyempurnakan dokumen sesuai perintah Anda.
+                                      </p>
+                                      <div className="pt-1">
+                                        <div className="text-[10px] uppercase font-semibold text-zinc-400 tracking-wider mb-2">
+                                          Ide Instruksi Cepat:
+                                        </div>
+                                        <div className="flex flex-col gap-1.5">
+                                          {getDocQuickPrompts(activeDoc.filename).map((prompt, pIdx) => (
+                                            <button
+                                              key={pIdx}
+                                              onClick={() => handleSendChatEdit(prompt)}
+                                              className="w-full text-left p-2 rounded-lg bg-surface border border-border hover:border-cyan-500/40 hover:bg-cyan-500/5 text-zinc-300 text-[11px] flex items-center justify-between group transition-all"
+                                            >
+                                              <span className="line-clamp-1">{prompt}</span>
+                                              <ArrowRight className="h-3 w-3 text-zinc-600 group-hover:text-cyan-400 shrink-0 ml-1" />
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    chatMessages.map((msg) => (
+                                      <div
+                                        key={msg.id}
+                                        className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
+                                      >
+                                        <div
+                                          className={`max-w-[95%] p-3 rounded-xl ${
+                                            msg.role === "user"
+                                              ? "bg-zinc-800 text-zinc-100 border border-zinc-700/80 rounded-tr-none"
+                                              : "bg-surface border border-cyan-500/30 text-zinc-200 rounded-tl-none shadow-sm"
+                                          }`}
+                                        >
+                                          <div className="flex items-center justify-between gap-3 text-[10px] text-zinc-400 mb-1 font-mono">
+                                            <span className="font-semibold text-cyan-400 flex items-center gap-1">
+                                              {msg.role === "user" ? "Anda" : "Co-Pilot AI"}
+                                            </span>
+                                            <span>{msg.timestamp}</span>
+                                          </div>
+
+                                          <div className="leading-relaxed whitespace-pre-wrap">{msg.text}</div>
+
+                                          {/* If Assistant proposed revised content */}
+                                          {msg.revisedContent && (
+                                            <div className="mt-2.5 pt-2.5 border-t border-border/80 space-y-2">
+                                              <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400">
+                                                <span className="text-emerald-400 font-medium">Revisi untuk {msg.targetFilename}</span>
+                                                <span>{msg.revisedContent.split(/\s+/).filter(Boolean).length} kata</span>
+                                              </div>
+
+                                              <pre className="max-h-24 overflow-y-auto p-2 bg-zinc-950 rounded border border-border font-mono text-[10px] text-zinc-400 whitespace-pre-wrap">
+                                                {msg.revisedContent.slice(0, 320)}...
+                                              </pre>
+
+                                              <div className="flex items-center gap-2 pt-1 flex-wrap">
+                                                {msg.applied ? (
+                                                  <div className="px-2.5 py-1 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[11px] font-semibold flex items-center gap-1">
+                                                    <Check className="h-3 w-3" />
+                                                    <span>Telah Diterapkan</span>
+                                                  </div>
+                                                ) : (
+                                                  <button
+                                                    onClick={() => handleApplyChatRevision(msg.revisedContent!, msg.targetFilename!, msg.id)}
+                                                    className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold text-xs flex items-center gap-1 shadow-sm active:scale-95 transition-all"
+                                                  >
+                                                    <Check className="h-3 w-3" />
+                                                    <span>Terapkan ke Dokumen</span>
+                                                  </button>
+                                                )}
+
+                                                <button
+                                                  onClick={() => {
+                                                    navigator.clipboard.writeText(msg.revisedContent!);
+                                                    showNotice("Revisi tersalin ke clipboard!");
+                                                  }}
+                                                  className="px-2 py-1 rounded bg-surface-elevated hover:bg-zinc-700 text-zinc-300 text-[11px] flex items-center gap-1 transition-all"
+                                                >
+                                                  <Copy className="h-3 w-3" />
+                                                  <span>Salin</span>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    ))
+                                  )}
+
+                                  {isChatSubmitting && (
+                                    <div className="p-3 rounded-xl bg-surface border border-cyan-500/30 flex items-center gap-2 text-cyan-300 text-xs">
+                                      <Sparkles className="h-4 w-4 animate-spin text-cyan-400" />
+                                      <span>Co-Pilot sedang merancang revisi arsitektur...</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Bottom Quick Suggestion Pills */}
+                                {chatMessages.length > 0 && (
+                                  <div className="px-3 py-1.5 border-t border-border/60 bg-zinc-900/40 flex items-center gap-1.5 overflow-x-auto text-[10px]">
+                                    <span className="text-zinc-500 font-mono shrink-0">Ide:</span>
+                                    {getDocQuickPrompts(activeDoc.filename).slice(0, 3).map((prompt, pIdx) => (
+                                      <button
+                                        key={pIdx}
+                                        onClick={() => handleSendChatEdit(prompt)}
+                                        className="shrink-0 px-2 py-0.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-border/80 whitespace-nowrap transition-all"
+                                      >
+                                        {prompt}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {/* Chat Input Bar */}
+                                <div className="p-3 border-t border-border bg-surface-muted/60">
+                                  <div className="relative flex items-center">
+                                    <textarea
+                                      rows={2}
+                                      value={chatInputText}
+                                      onChange={(e) => setChatInputText(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" && !e.shiftKey) {
+                                          e.preventDefault();
+                                          handleSendChatEdit();
+                                        }
+                                      }}
+                                      placeholder={`Instruksikan revisi untuk ${activeDoc.filename}... (Enter untuk kirim)`}
+                                      className="w-full pl-3 pr-10 py-2 rounded-xl bg-surface border border-border text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-cyan-500/60 resize-none"
+                                    />
+                                    <button
+                                      onClick={() => handleSendChatEdit()}
+                                      disabled={!chatInputText.trim() || isChatSubmitting}
+                                      className="absolute right-2 p-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-zinc-950 disabled:opacity-30 disabled:pointer-events-none transition-all"
+                                      title="Kirim instruksi ke Co-Pilot AI"
+                                    >
+                                      <Send className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="flex items-center justify-between text-[10px] text-zinc-500 mt-1.5 font-mono px-0.5">
+                                    <span>Shift+Enter untuk baris baru</span>
+                                    <span className="text-cyan-400">Tekan 'Terapkan' untuk auto-sync</span>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
-
-                  {/* Viewer / Editor */}
-                  <div className="lg:col-span-8 flex flex-col rounded-xl bg-surface border border-border overflow-hidden">
-                    {activeDoc && (
-                      <>
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-border px-3.5 sm:px-4 py-2.5 sm:py-3 bg-surface-muted/50">
-                          <div className="flex items-center gap-2 min-w-0 flex-wrap">
-                            <FileText className="h-4 w-4 text-emerald-400 shrink-0" />
-                            <span className="font-mono text-xs font-semibold text-white">{activeDoc.filename}</span>
-                            <span className="text-zinc-500 text-xs">•</span>
-                            <span className="text-xs text-zinc-400 truncate max-w-[200px]">{activeDoc.title || activeDoc.filename}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <button
-                              onClick={handleDeepenActiveDoc}
-                              disabled={isDeepeningDoc}
-                              className="px-2.5 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                              title="Perdalam dan kembangkan spesifikasi dokumen ini dengan AI Gemini"
-                            >
-                              <Sparkles className={`h-3 w-3 text-emerald-400 ${isDeepeningDoc ? "animate-spin" : ""}`} />
-                              <span>{isDeepeningDoc ? "Memperdalam..." : "Perdalam dengan AI"}</span>
-                            </button>
-
-                            <button
-                              onClick={() => {
-                                if (!isEditingDoc) {
-                                  setEditedDocContent(activeDoc.content);
-                                  setIsEditingDoc(true);
-                                } else {
-                                  handleSaveDocEdit();
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded bg-surface-elevated hover:bg-zinc-700 text-zinc-200 border border-border text-xs flex items-center gap-1.5 transition-all"
-                            >
-                              {isEditingDoc ? <Save className="h-3 w-3 text-emerald-400" /> : <Edit3 className="h-3 w-3" />}
-                              <span>{isEditingDoc ? "Simpan Perubahan" : "Edit Markdown"}</span>
-                            </button>
-                            {isEditingDoc && (
-                              <button
-                                onClick={() => setIsEditingDoc(false)}
-                                className="px-2 py-1 rounded hover:bg-zinc-800 text-zinc-400 text-xs"
-                              >
-                                Batal
-                              </button>
-                            )}
-                            <span className="text-[11px] font-mono text-zinc-500 ml-1">
-                              {activeDoc.content.split(/\s+/).filter(Boolean).length} kata
-                            </span>
-                          </div>
-                        </div>
-
-                        {isEditingDoc ? (
-                          <div className="p-4 flex-1 flex flex-col">
-                            <textarea
-                              rows={22}
-                              value={editedDocContent}
-                              onChange={(e) => setEditedDocContent(e.target.value)}
-                              className="w-full h-full p-4 rounded-lg bg-surface-muted border border-border text-zinc-200 font-mono text-xs leading-relaxed focus:outline-none focus:border-emerald-500"
-                            />
-                          </div>
-                        ) : (
-                          <div className="p-4 sm:p-6 overflow-y-auto max-h-[640px] font-mono text-xs text-zinc-200 leading-relaxed whitespace-pre-wrap selection:bg-emerald-500/30">
-                            {activeDoc.content}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
                 )}
               </div>
             )}
