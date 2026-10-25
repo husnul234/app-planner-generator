@@ -12,6 +12,7 @@ Dokumen ini melacak rencana pengembangan bertahap (*implementation plan*) berdas
 | **Fase 2** | **BYOK Multi-Key & Smart Editor** | Kolam Multi-Key Gemini, Model Fallback Chain, Inline Markdown Editor, Custom Docs | **SELESAI (100%)** |
 | **Fase 3** | **Team Collaboration & RBAC** | Role Admin & User, Sistem Undangan Kolaborator, Simulasi Switcher Persona, Kuota Kredit | **SELESAI (100%)** |
 | **Fase 4** | **Observability & AI Context Hub** | Live Telemetry 5 Layanan Neon, Export AI Context Master Bundle, Cloudflare Pages Ready | **SELESAI (100%)** |
+| **Fase 5** | **IDE Co-Pilot & Production Hardening** | IDE Chat Co-Pilot (Cursor style), Plan Import (MD/ZIP), Mobile Drawer, Sans-Serif Typography, Build V8 Memory Fix | **SELESAI (100%)** |
 
 ---
 
@@ -120,3 +121,25 @@ Berdasarkan permintaan pengguna dan pembaruan kuota Google AI Studio terbaru:
      - Kunci BYOK Saya (Manajemen kunci pribadi, validasi live ke Google API, tester inferensi).
      - *User terisolasi dari akses telemetri infrastruktur dan pengelolaan role tim.*
 
+---
+
+## 5. Pembaruan Lanjutan: IDE Chat Co-Pilot, Import Plan Engine, Mobile Drawer & Build Memory Stabilization
+
+Status pembaruan per 25 Oktober 2026 (Lihat log lengkap di [log-context.251026.md](file:///e:/3.%20PRODUK%20DIGITAL/05%20-%20Aplikasi%20dan%20Pengembangan/App/48.%20APP%20PLANNER/APP%20PLANER%20CODE/logs/log-context.251026.md)):
+
+1. **IDE Chat Co-Pilot (Cursor / Lovable Style Interactive Revision):**
+   - Panel sidecar interaktif terintegrasi berdampingan dengan viewer/editor dokumen markdown di Workspace.
+   - Endpoint khusus `/api/generate/chat-edit` dengan model fallback pool Google Gemini 2026.
+   - Quick prompt pills adaptif sesuai jenis dokumen yang aktif (`database_schema.md`, `PRD.md`, `architecture.md`, dsb.).
+   - Tombol 1-click *Terapkan ke Dokumen* dengan sinkronisasi otomatis ke Neon Postgres & S3.
+   - Version history stack dengan tombol 1-click *Undo*.
+   - Status default panel Co-Pilot aktif secara default (`showChatEdit: true`) untuk semua proyek (lama maupun baru).
+2. **Import Blueprint Plan (Markdown & ZIP):**
+   - Mendukung upload file markdown tunggal (`.md`) dan arsip ZIP (`.zip` diproses via `JSZip`) langsung menjadi proyek blueprint aktif tanpa perlu regenerasi wizard.
+3. **Penyempurnaan Navigasi Mobile:**
+   - Tombol hamburger dan slide-out drawer responsif untuk navigasi lancar di perangkat mobile (`<768px`).
+4. **Pembaruan Tipografi Nyaman (Sans-Serif):**
+   - Transisi teks viewer & editor dari `font-mono text-xs` ke `font-sans text-[13.5px] sm:text-[14px]` dengan font stack sistem modern di `globals.css`.
+5. **Stabilisasi Memori Build Next.js (V8 Heap Fix):**
+   - Konfigurasi `workerThreads: false` dan `cpus: 1` di `next.config.ts` untuk mengeliminasi crash *Zone Allocation Failed (Out of Memory)*.
+   - Kompilasi `npm run build` sukses 100% (Exit Code 0).
